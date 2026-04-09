@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Search Vehicles — Coach Services Co.</title>
+  <link rel="stylesheet" href="/css/style.css"/>
+</head>
+<body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">🚌</div>
+      <div class="brand-text"><h2>Coach Services</h2><span>Brisbane Olympics 2032</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Main</div>
+      <a href="/user/dashboard.html" class="nav-item"><span class="nav-icon">🏠</span> Dashboard</a>
+      <a href="/user/events.html" class="nav-item"><span class="nav-icon">🏅</span> Events</a>
+      <a href="/user/search.html" class="nav-item active"><span class="nav-icon">🔍</span> Search Vehicles</a>
+      <a href="/user/book.html" class="nav-item"><span class="nav-icon">🎫</span> Book a Ride</a>
+    </div>
+    <div class="sidebar-section" style="margin-top:12px;">
+      <div class="sidebar-section-label">Account</div>
+      <a href="/user/profile.html" class="nav-item"><span class="nav-icon">👤</span> My Profile</a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-card">
+        <div class="user-avatar" id="sidebar-user-avatar">U</div>
+        <div class="user-info"><div class="name" id="sidebar-user-name">Loading...</div><div class="role" id="sidebar-user-role">user</div></div>
+        <button class="btn-logout" onclick="logout()" title="Logout">⏻</button>
+      </div>
+    </div>
+  </aside>
+  <div class="main-content">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="hamburger" id="hamburger">☰</button>
+        <div>
+          <div class="breadcrumb"><a href="/user/dashboard.html">Dashboard</a><span class="sep">›</span><span>Search</span></div>
+          <div class="page-title">Search Vehicles</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <button class="notif-btn" onclick="toggleNotifPanel()">🔔<span class="notif-dot" id="notif-dot" style="display:none;"></span></button>
+      </div>
+    </header>
+    <div class="notif-panel" id="notif-panel">
+      <div class="notif-panel-header"><h3>🔔 Notifications</h3></div>
+      <div class="notif-list" id="notif-list"></div>
+    </div>
+    <main class="page-content">
+      <div class="page-header">
+        <div>
+          <h2>Find Your Ride</h2>
+          <p>Search available vehicles by pickup and drop-off location</p>
+        </div>
+      </div>
+
+      <!-- Search Form -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <div class="form-row" style="align-items:flex-end;gap:12px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label">📍 Pickup Location</label>
+              <input type="text" id="search-pickup" class="form-control" placeholder="e.g. Brisbane CBD Coach Terminal"/>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label">🏁 Drop-off Location</label>
+              <input type="text" id="search-dropoff" class="form-control" placeholder="e.g. Gabba Stadium"/>
+            </div>
+            <div style="display:flex;gap:8px;flex-shrink:0;">
+              <button class="btn btn-primary" onclick="doSearch()">🔍 Search</button>
+              <button class="btn btn-outline" onclick="clearSearch()">✕ Clear</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fixed Pickup Notice -->
+      <div class="alert alert-info show mb-4">
+        📌 <strong>Note:</strong> All pickups are from the designated Brisbane Olympics Coach Terminal. Customers must arrive at the pickup point before departure.
+      </div>
+
+      <!-- Results -->
+      <div id="results-header" class="flex-between mb-3" style="display:none!important;">
+        <span id="results-count" class="text-muted" style="font-size:14px;"></span>
+      </div>
+      <div id="search-results" class="vehicle-grid">
+        <div class="loading" style="grid-column:span 3;"><div class="spinner"></div><span>Loading available routes...</span></div>
+      </div>
+    </main>
+  </div>
+</div>
+<script src="/js/api.js"></script>
+<script src="/js/app.js"></script>
+<script>
+const currentUser = requireAuth('user');
+if (currentUser) { populateSidebar(currentUser); initSidebar(); doSearch(); loadNotifications(); }
+
+async function doSearch() {
+  const pickup = document.getElementById('search-pickup').value.trim();
+  const dropoff = document.getElementById('search-dropoff').value.trim();
+  const container = document.getElementById('search-results');
+  container.innerHTML = '<div class="loading" style="grid-column:span 3;"><div class="spinner"></div><span>Searching...</span></div>';
+
+  const res = await api.searchRoutes(pickup, dropoff);
+  if (!res.ok) {
+    container.innerHTML = '<div class="alert alert-danger show" style="grid-column:span 3;">Failed to load routes</div>';
+    return;
+  }
+  const routes = res.data.data || [];
+  document.getElementById('results-count').textContent = `${routes.length} route${routes.length !== 1 ? 's' : ''} found`;
+  if (routes.length === 0) {
+    const msg = pickup || dropoff ? 'No routes found for your search. Try different locations.' : 'No routes available yet.';
+    container.innerHTML = `<div class="empty-state" style="grid-column:span 3;"><div class="empty-icon">🚌</div><h3>No Routes Found</h3><p>${msg}</p></div>`;
+    return;
+  }
+  container.innerHTML = routes.map(r => `
+    <div class="vehicle-card" onclick="selectRoute(${r.id}, '${encodeURIComponent(JSON.stringify(r))}')">
+      <div class="vehicle-card-header">
+        <div class="vehicle-icon">🚌</div>
+        <div class="vehicle-info">
+          <h3>${r.vehicle_name || 'Coach'}</h3>
+          <span>Plate: ${r.plate_number || 'N/A'}</span>
+        </div>
+        ${r.vehicle_status === 'active' ? '<span class="badge badge-active">Available</span>' : '<span class="badge badge-inactive">Unavailable</span>'}
+      </div>
+      <div class="route-display" style="margin-bottom:12px;">
+        <div class="route-point"><div class="route-dot pickup"></div><span style="font-size:13px;color:var(--accent);">📍 ${r.pickup_location}</span></div>
+        <div class="route-line"></div>
+        <div class="route-point"><div class="route-dot dropoff"></div><span style="font-size:13px;color:var(--primary);">🏁 ${r.dropoff_location}</span></div>
+      </div>
+      <div class="vehicle-detail"><span>👤</span><span>Driver: <strong>${r.driver_name || 'N/A'}</strong></span></div>
+      <div class="vehicle-detail"><span>🪑</span><span>Seats: <strong>${r.seats || 'N/A'}</strong></span></div>
+      <div class="vehicle-price">
+        <div><div class="price-label">Fixed Price</div><div class="price-value">A$${parseFloat(r.price).toFixed(2)}</div></div>
+        <a href="/user/book.html?route_id=${r.id}&vehicle_id=${r.vehicle_id}" class="btn btn-primary btn-sm">Book Now →</a>
+      </div>
+    </div>
+  `).join('');
+}
+
+function clearSearch() {
+  document.getElementById('search-pickup').value = '';
+  document.getElementById('search-dropoff').value = '';
+  doSearch();
+}
+
+function selectRoute(id, encoded) {
+  const r = JSON.parse(decodeURIComponent(encoded));
+  window.location.href = `/user/book.html?route_id=${r.id}&vehicle_id=${r.vehicle_id}`;
+}
+</script>
+</body>
+</html>

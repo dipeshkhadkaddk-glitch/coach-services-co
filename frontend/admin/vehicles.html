@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Vehicles — Coach Services Co.</title>
+  <link rel="stylesheet" href="/css/style.css"/>
+</head>
+<body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">🚌</div>
+      <div class="brand-text"><h2>Coach Services</h2><span>Admin Portal</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="/admin/dashboard.html" class="nav-item"><span class="nav-icon">📊</span> Dashboard</a>
+      <a href="/admin/bookings.html" class="nav-item"><span class="nav-icon">🎫</span> Bookings</a>
+    </div>
+    <div class="sidebar-section" style="margin-top:12px;">
+      <div class="sidebar-section-label">Management</div>
+      <a href="/admin/users.html" class="nav-item"><span class="nav-icon">👥</span> Users</a>
+      <a href="/admin/vehicles.html" class="nav-item active"><span class="nav-icon">🚌</span> Vehicles</a>
+      <a href="/admin/routes.html" class="nav-item"><span class="nav-icon">🗺️</span> Routes & Pricing</a>
+      <a href="/admin/events.html" class="nav-item"><span class="nav-icon">🏅</span> Events</a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-card">
+        <div class="user-avatar" id="sidebar-user-avatar">A</div>
+        <div class="user-info"><div class="name" id="sidebar-user-name">Admin</div><div class="role" id="sidebar-user-role">admin</div></div>
+        <button class="btn-logout" onclick="logout()">⏻</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="hamburger" id="hamburger">☰</button>
+        <div>
+          <div class="breadcrumb"><a href="/admin/dashboard.html">Dashboard</a><span class="sep">›</span><span>Vehicles</span></div>
+          <div class="page-title">Vehicle Management</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <button class="notif-btn" onclick="toggleNotifPanel()">🔔<span class="notif-dot" id="notif-dot" style="display:none;"></span></button>
+      </div>
+    </header>
+    <div class="notif-panel" id="notif-panel">
+      <div class="notif-panel-header"><h3>🔔 Notifications</h3></div>
+      <div class="notif-list" id="notif-list"></div>
+    </div>
+
+    <main class="page-content">
+      <div class="page-header">
+        <div><h2>Vehicles</h2><p>Manage coach fleet for Brisbane Olympics 2032</p></div>
+        <button class="btn btn-primary" onclick="openAddModal()">+ Add Vehicle</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Fleet Overview</h3>
+          <span id="vehicle-count" class="text-muted" style="font-size:13px;"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Vehicle Name</th><th>Seats</th><th>Driver</th><th>Plate Number</th><th>Status</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="vehicles-table">
+              <tr><td colspan="6" class="text-center" style="padding:40px;color:var(--text-muted);">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Add/Edit Vehicle Modal -->
+<div class="modal-overlay" id="vehicle-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title" id="vehicle-modal-title">Add Vehicle</h3>
+      <button class="modal-close" onclick="closeModal('vehicle-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="vehicle-alert" class="alert"></div>
+      <form id="vehicle-form" onsubmit="saveVehicle(event)">
+        <input type="hidden" id="vehicle-id"/>
+        <div class="form-group">
+          <label class="form-label">Vehicle Name *</label>
+          <input type="text" id="v-name" class="form-control" placeholder="e.g. Brisbane Express Coach A" required/>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Number of Seats *</label>
+            <input type="number" id="v-seats" class="form-control" placeholder="e.g. 48" min="1" max="100" required/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Plate Number *</label>
+            <input type="text" id="v-plate" class="form-control" placeholder="e.g. ABC-123" required/>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Driver Name *</label>
+          <input type="text" id="v-driver" class="form-control" placeholder="e.g. Michael Johnson" required/>
+        </div>
+        <div class="form-group" id="status-group" style="display:none;">
+          <label class="form-label">Status</label>
+          <select id="v-status" class="form-control">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('vehicle-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="document.getElementById('vehicle-form').requestSubmit()" id="vehicle-save-btn">💾 Save Vehicle</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/app.js"></script>
+<script>
+const currentUser = requireAuth('admin');
+if (currentUser) { populateSidebar(currentUser); initSidebar(); loadVehicles(); loadNotifications(); }
+
+async function loadVehicles() {
+  const tbody = document.getElementById('vehicles-table');
+  const res = await api.getVehicles();
+  if (!res.ok) { tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:30px;">Failed to load</td></tr>'; return; }
+  const vehicles = res.data.data || [];
+  document.getElementById('vehicle-count').textContent = `${vehicles.length} vehicle${vehicles.length!==1?'s':''}`;
+  if (vehicles.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="padding:50px;">
+      <div class="empty-state"><div class="empty-icon">🚌</div><h3>No Vehicles Yet</h3><p>Add your first vehicle to the fleet</p></div>
+    </td></tr>`;
+    return;
+  }
+  tbody.innerHTML = vehicles.map(v => `
+    <tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:36px;height:36px;background:var(--secondary);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;">🚌</div>
+          <div style="font-weight:600;">${v.name}</div>
+        </div>
+      </td>
+      <td><span style="font-weight:700;color:var(--primary);">${v.seats}</span> seats</td>
+      <td>${v.driver_name}</td>
+      <td><code style="background:var(--bg-dark);padding:3px 8px;border-radius:4px;font-size:13px;">${v.plate_number}</code></td>
+      <td>${statusBadge(v.status)}</td>
+      <td>
+        <div class="action-btns">
+          <button class="btn btn-outline btn-sm" onclick="editVehicle(${JSON.stringify(v).replace(/"/g,'&quot;')})">✏️ Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteVehicle(${v.id},this)">🗑</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function openAddModal() {
+  document.getElementById('vehicle-modal-title').textContent = 'Add Vehicle';
+  document.getElementById('vehicle-id').value = '';
+  document.getElementById('vehicle-form').reset();
+  document.getElementById('status-group').style.display = 'none';
+  document.getElementById('vehicle-alert').className = 'alert';
+  openModal('vehicle-modal');
+}
+
+function editVehicle(v) {
+  document.getElementById('vehicle-modal-title').textContent = 'Edit Vehicle';
+  document.getElementById('vehicle-id').value = v.id;
+  document.getElementById('v-name').value = v.name;
+  document.getElementById('v-seats').value = v.seats;
+  document.getElementById('v-plate').value = v.plate_number;
+  document.getElementById('v-driver').value = v.driver_name;
+  document.getElementById('v-status').value = v.status;
+  document.getElementById('status-group').style.display = 'block';
+  document.getElementById('vehicle-alert').className = 'alert';
+  openModal('vehicle-modal');
+}
+
+async function saveVehicle(e) {
+  e.preventDefault();
+  const id = document.getElementById('vehicle-id').value;
+  const data = {
+    name: document.getElementById('v-name').value.trim(),
+    seats: parseInt(document.getElementById('v-seats').value),
+    driver_name: document.getElementById('v-driver').value.trim(),
+    plate_number: document.getElementById('v-plate').value.trim(),
+    status: document.getElementById('v-status').value || 'active',
+  };
+  const alertEl = document.getElementById('vehicle-alert');
+  const btn = document.getElementById('vehicle-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  const res = id ? await api.updateVehicle(id, data) : await api.createVehicle(data);
+  btn.disabled = false; btn.innerHTML = '💾 Save Vehicle';
+  if (!res.ok) {
+    alertEl.className = 'alert alert-danger show';
+    alertEl.innerHTML = '❌ ' + (res.data.message || 'Failed to save');
+    return;
+  }
+  toast.success(id ? 'Vehicle updated!' : 'Vehicle added!');
+  closeModal('vehicle-modal');
+  loadVehicles();
+}
+
+async function deleteVehicle(id, btn) {
+  if (!confirm('Delete this vehicle? This will also remove associated routes.')) return;
+  btn.disabled = true;
+  const res = await api.deleteVehicle(id);
+  if (res.ok) { toast.success('Vehicle deleted'); loadVehicles(); }
+  else { toast.error(res.data.message); btn.disabled = false; }
+}
+</script>
+</body>
+</html>

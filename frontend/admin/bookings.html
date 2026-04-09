@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Bookings — Coach Services Co.</title>
+  <link rel="stylesheet" href="/css/style.css"/>
+</head>
+<body>
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">🚌</div>
+      <div class="brand-text"><h2>Coach Services</h2><span>Admin Portal</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Overview</div>
+      <a href="/admin/dashboard.html" class="nav-item"><span class="nav-icon">📊</span> Dashboard</a>
+      <a href="/admin/bookings.html" class="nav-item active"><span class="nav-icon">🎫</span> Bookings</a>
+    </div>
+    <div class="sidebar-section" style="margin-top:12px;">
+      <div class="sidebar-section-label">Management</div>
+      <a href="/admin/users.html" class="nav-item"><span class="nav-icon">👥</span> Users</a>
+      <a href="/admin/vehicles.html" class="nav-item"><span class="nav-icon">🚌</span> Vehicles</a>
+      <a href="/admin/routes.html" class="nav-item"><span class="nav-icon">🗺️</span> Routes & Pricing</a>
+      <a href="/admin/events.html" class="nav-item"><span class="nav-icon">🏅</span> Events</a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-card">
+        <div class="user-avatar" id="sidebar-user-avatar">A</div>
+        <div class="user-info"><div class="name" id="sidebar-user-name">Admin</div><div class="role" id="sidebar-user-role">admin</div></div>
+        <button class="btn-logout" onclick="logout()">⏻</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="hamburger" id="hamburger">☰</button>
+        <div>
+          <div class="breadcrumb"><a href="/admin/dashboard.html">Dashboard</a><span class="sep">›</span><span>Bookings</span></div>
+          <div class="page-title">Bookings Management</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <button class="notif-btn" onclick="toggleNotifPanel()">🔔<span class="notif-dot" id="notif-dot" style="display:none;"></span></button>
+      </div>
+    </header>
+    <div class="notif-panel" id="notif-panel">
+      <div class="notif-panel-header"><h3>🔔 Notifications</h3></div>
+      <div class="notif-list" id="notif-list"></div>
+    </div>
+
+    <main class="page-content">
+      <div class="page-header">
+        <div><h2>All Bookings</h2><p>Manage and confirm ride bookings</p></div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="filter-bar">
+        <select id="filter-type" class="form-control" onchange="loadBookings()" style="width:180px;">
+          <option value="">All Types</option>
+          <option value="individual">Individual</option>
+          <option value="group">Group</option>
+        </select>
+        <select id="filter-status" class="form-control" onchange="filterByStatus()" style="width:180px;">
+          <option value="">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <button class="btn btn-outline" onclick="resetFilters()">Reset</button>
+        <span id="booking-count" class="text-muted" style="font-size:13px;align-self:center;margin-left:auto;"></span>
+      </div>
+
+      <!-- Stats Row -->
+      <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px;" id="booking-stats">
+        <div class="stat-card yellow"><span class="stat-icon">⏳</span><div class="stat-value" id="bs-pending">—</div><div class="stat-label">Pending</div></div>
+        <div class="stat-card green"><span class="stat-icon">✅</span><div class="stat-value" id="bs-confirmed">—</div><div class="stat-label">Confirmed</div></div>
+        <div class="stat-card red"><span class="stat-icon">❌</span><div class="stat-value" id="bs-cancelled">—</div><div class="stat-label">Cancelled</div></div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>ID</th><th>Customer</th><th>Route</th><th>Type</th><th>Pax</th><th>Price</th><th>Status</th><th>Date</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="bookings-table">
+              <tr><td colspan="9" class="text-center" style="padding:40px;color:var(--text-muted);">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Booking Detail Modal -->
+<div class="modal-overlay" id="booking-modal">
+  <div class="modal" style="max-width:600px;">
+    <div class="modal-header">
+      <h3 class="modal-title" id="booking-modal-title">Booking Details</h3>
+      <button class="modal-close" onclick="closeModal('booking-modal')">×</button>
+    </div>
+    <div class="modal-body" id="booking-modal-body"></div>
+    <div class="modal-footer" id="booking-modal-footer"></div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/app.js"></script>
+<script>
+const currentUser = requireAuth('admin');
+let allBookings = [];
+if (currentUser) { populateSidebar(currentUser); initSidebar(); loadBookings(); loadNotifications(); }
+
+async function loadBookings() {
+  const type = document.getElementById('filter-type').value;
+  const tbody = document.getElementById('bookings-table');
+  tbody.innerHTML = '<tr><td colspan="9" class="text-center" style="padding:30px;"><div class="spinner" style="margin:auto;width:24px;height:24px;"></div></td></tr>';
+  const res = await api.getBookings(type);
+  if (!res.ok) { tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted" style="padding:30px;">Failed to load</td></tr>'; return; }
+  allBookings = res.data.data || [];
+  // Update stats
+  document.getElementById('bs-pending').textContent = allBookings.filter(b=>b.status==='pending').length;
+  document.getElementById('bs-confirmed').textContent = allBookings.filter(b=>b.status==='confirmed').length;
+  document.getElementById('bs-cancelled').textContent = allBookings.filter(b=>b.status==='cancelled').length;
+  renderBookings(allBookings);
+}
+
+function filterByStatus() {
+  const status = document.getElementById('filter-status').value;
+  const filtered = status ? allBookings.filter(b => b.status === status) : allBookings;
+  renderBookings(filtered);
+}
+
+function resetFilters() {
+  document.getElementById('filter-type').value = '';
+  document.getElementById('filter-status').value = '';
+  loadBookings();
+}
+
+function renderBookings(bookings) {
+  const tbody = document.getElementById('bookings-table');
+  document.getElementById('booking-count').textContent = `${bookings.length} booking${bookings.length!==1?'s':''}`;
+  if (bookings.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" class="text-center" style="padding:50px;">
+      <div class="empty-state"><div class="empty-icon">🎫</div><h3>No Bookings Found</h3><p>No bookings match the selected filters</p></div>
+    </td></tr>`;
+    return;
+  }
+  tbody.innerHTML = bookings.map(b => `
+    <tr>
+      <td style="font-weight:700;color:var(--primary);">#${b.id}</td>
+      <td>
+        <div style="font-weight:600;">${b.user_name || 'N/A'}</div>
+        <div style="font-size:12px;color:var(--text-muted);">${b.user_phone || ''}</div>
+      </td>
+      <td style="font-size:13px;">
+        <div style="color:var(--accent);">📍 ${b.pickup_location || 'N/A'}</div>
+        <div style="color:var(--primary);">🏁 ${b.dropoff_location || 'N/A'}</div>
+      </td>
+      <td>${statusBadge(b.booking_type)}</td>
+      <td style="text-align:center;font-weight:700;">${b.passenger_count}</td>
+      <td style="font-weight:700;color:var(--primary);">${b.price ? 'A$'+parseFloat(b.price).toFixed(2) : '—'}</td>
+      <td>${statusBadge(b.status)}</td>
+      <td style="font-size:12px;color:var(--text-muted);">${formatDate(b.created_at)}</td>
+      <td>
+        <div class="action-btns">
+          <button class="btn btn-outline btn-sm" onclick="viewBooking(${JSON.stringify(b).replace(/"/g,'&quot;')})">👁</button>
+          ${b.status==='pending' ? `
+            <button class="btn btn-success btn-sm" onclick="updateStatus(${b.id},'confirmed',this)">✓</button>
+            <button class="btn btn-danger btn-sm" onclick="updateStatus(${b.id},'cancelled',this)">✕</button>` : ''}
+          ${b.status==='confirmed' ? `<button class="btn btn-danger btn-sm" onclick="updateStatus(${b.id},'cancelled',this)">Cancel</button>` : ''}
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function viewBooking(b) {
+  const passengersHtml = b.passengers && b.passengers.length > 0
+    ? `<div style="margin-top:16px;">
+        <div class="form-label" style="margin-bottom:10px;">Passengers (${b.passengers.length})</div>
+        ${b.passengers.map((p,i) => `
+          <div class="passenger-row">
+            <div class="passenger-row-header">Passenger ${i+1}</div>
+            <div style="font-size:14px;">${p.passenger_name} ${p.passenger_phone ? '— '+p.passenger_phone : ''}</div>
+          </div>`).join('')}
+      </div>`
+    : '';
+  document.getElementById('booking-modal-title').textContent = `Booking #${b.id}`;
+  document.getElementById('booking-modal-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+      <div class="info-item"><div class="info-label">Customer</div><div class="info-value">${b.user_name}</div></div>
+      <div class="info-item"><div class="info-label">Phone</div><div class="info-value">${b.user_phone||'—'}</div></div>
+      <div class="info-item"><div class="info-label">Email</div><div class="info-value" style="font-size:13px;">${b.user_email||'—'}</div></div>
+      <div class="info-item"><div class="info-label">Type</div><div class="info-value">${statusBadge(b.booking_type)}</div></div>
+      <div class="info-item"><div class="info-label">Status</div><div class="info-value">${statusBadge(b.status)}</div></div>
+      <div class="info-item"><div class="info-label">Passengers</div><div class="info-value">${b.passenger_count}</div></div>
+      <div class="info-item"><div class="info-label">Vehicle</div><div class="info-value">${b.vehicle_name||'—'} ${b.plate_number?'('+b.plate_number+')':''}</div></div>
+      <div class="info-item"><div class="info-label">Price</div><div class="info-value" style="color:var(--primary);font-weight:700;">${b.price?'A$'+parseFloat(b.price).toFixed(2):'—'}</div></div>
+    </div>
+    <div class="alert alert-info show" style="font-size:13px;">
+      <div>📍 <strong>Pickup:</strong> ${b.pickup_location||'N/A'}</div>
+      <div style="margin-top:6px;">🏁 <strong>Drop-off:</strong> ${b.dropoff_location||'N/A'}</div>
+    </div>
+    ${b.notes ? `<div class="info-item mt-3"><div class="info-label">Notes</div><div class="info-value">${b.notes}</div></div>` : ''}
+    ${passengersHtml}
+    <div class="info-item mt-3"><div class="info-label">Submitted</div><div class="info-value">${formatDateTime(b.created_at)}</div></div>
+  `;
+  document.getElementById('booking-modal-footer').innerHTML = `
+    <button class="btn btn-outline" onclick="closeModal('booking-modal')">Close</button>
+    ${b.status==='pending' ? `
+      <button class="btn btn-success" onclick="updateStatus(${b.id},'confirmed',this);closeModal('booking-modal')">✓ Confirm Booking</button>
+      <button class="btn btn-danger" onclick="updateStatus(${b.id},'cancelled',this);closeModal('booking-modal')">✕ Cancel</button>` : ''}
+  `;
+  openModal('booking-modal');
+}
+
+async function updateStatus(id, status, btn) {
+  if (status === 'cancelled' && !confirm('Cancel this booking? An SMS will be sent to the customer.')) return;
+  btn.disabled = true;
+  const res = await api.updateBookingStatus(id, status);
+  if (res.ok) { toast.success(`Booking ${status}!`); loadBookings(); }
+  else { toast.error(res.data.message); btn.disabled = false; }
+}
+</script>
+</body>
+</html>
