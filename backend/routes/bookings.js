@@ -104,7 +104,7 @@ router.post('/', authMiddleware, async (req, res) => {
     }
 
     // Notify admin
-    const [admins] = await pool.query('SELECT id FROM users WHERE role="admin"');
+    const [admins] = await pool.query("SELECT id FROM users WHERE role='admin'");
     for (const admin of admins) {
       await pool.query(
         'INSERT INTO notifications (user_id, message, type) VALUES (?,?,?)',

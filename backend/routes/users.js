@@ -8,7 +8,7 @@ const { emailProfileApproved, emailProfileRejected } = require('../utils/email')
 router.get('/', authMiddleware, adminMiddleware, async (req, res) => {
   const { search } = req.query;
   try {
-    let query = 'SELECT id, full_name, dob, phone, address, email, role, status, created_at FROM users WHERE role="user"';
+    let query = "SELECT id, full_name, dob, phone, address, email, role, status, created_at FROM users WHERE role='user'";
     const params = [];
     if (search) {
       query += ' AND (full_name LIKE ? OR email LIKE ? OR phone LIKE ?)';
@@ -58,7 +58,7 @@ router.put('/me', authMiddleware, async (req, res) => {
 router.get('/pending', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.query(
-      'SELECT id, full_name, dob, phone, address, email, status, created_at FROM users WHERE status="pending" AND role="user" ORDER BY created_at DESC'
+      "SELECT id, full_name, dob, phone, address, email, status, created_at FROM users WHERE status='pending' AND role='user' ORDER BY created_at DESC"
     );
     res.json({ success: true, data: rows });
   } catch (err) {
@@ -97,7 +97,7 @@ router.put('/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
 // DELETE /api/users/:id — admin: remove user
 router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    await pool.query('DELETE FROM users WHERE id=? AND role="user"', [req.params.id]);
+    await pool.query("DELETE FROM users WHERE id=? AND role='user'", [req.params.id]);
     res.json({ success: true, message: 'User removed successfully' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
