@@ -37,12 +37,12 @@ app.use('/api/notifications', notificationRoutes);
 app.get('/api/dashboard/stats', async (req, res) => {
   const { pool } = require('./config/db');
   try {
-    const [[{ total_users }]] = await pool.query('SELECT COUNT(*) AS total_users FROM users WHERE role="user" AND status="approved"');
-    const [[{ pending_users }]] = await pool.query('SELECT COUNT(*) AS pending_users FROM users WHERE role="user" AND status="pending"');
-    const [[{ total_vehicles }]] = await pool.query('SELECT COUNT(*) AS total_vehicles FROM vehicles WHERE status="active"');
-    const [[{ total_routes }]] = await pool.query('SELECT COUNT(*) AS total_routes FROM routes WHERE status="active"');
-    const [[{ total_bookings }]] = await pool.query('SELECT COUNT(*) AS total_bookings FROM bookings');
-    const [[{ pending_bookings }]] = await pool.query('SELECT COUNT(*) AS pending_bookings FROM bookings WHERE status="pending"');
+    const [[{ total_users }]] = await pool.query("SELECT COUNT(*) AS total_users FROM users WHERE role='user' AND status='approved'");
+    const [[{ pending_users }]] = await pool.query("SELECT COUNT(*) AS pending_users FROM users WHERE role='user' AND status='pending'");
+    const [[{ total_vehicles }]] = await pool.query("SELECT COUNT(*) AS total_vehicles FROM vehicles WHERE status='active'");
+    const [[{ total_routes }]] = await pool.query("SELECT COUNT(*) AS total_routes FROM routes WHERE status='active'");
+    const [[{ total_bookings }]] = await pool.query("SELECT COUNT(*) AS total_bookings FROM bookings");
+    const [[{ pending_bookings }]] = await pool.query("SELECT COUNT(*) AS pending_bookings FROM bookings WHERE status='pending'");
     const [[{ total_events }]] = await pool.query('SELECT COUNT(*) AS total_events FROM events');
     const [recent_bookings] = await pool.query(`
       SELECT b.id, b.booking_type, b.status, b.created_at, u.full_name, r.pickup_location, r.dropoff_location
