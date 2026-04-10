@@ -4,37 +4,68 @@ const { pool } = require('../config/db');
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 const { sendSMS } = require('../utils/sms');
 
+// GET /api/users — admin: get all users
 router.get('/', authMiddleware, adminMiddleware, async (req, res) => {
   const { search } = req.query;
   try {
-    let query = "SELECT id, full_name, phone, email, status, created_at FROM users WHERE role='user'";
+    let query = "SELECT id, full_name, dob, phone, address, email, role, status, created_at FROM users WHERE role='user'";
+    const params = [];
     if (search) {
       query += ' AND (full_name LIKE ? OR email LIKE ? OR phone LIKE ?)';
       const s = `%${search}%`;
-      const [rows] = await pool.query(query, [s, s, s]);
-      return res.json({ success: true, data: rows });
+      params.push(s, s, s);
     }
-    const [rows] = await pool.query(query);
+    query += ' ORDER BY created_at DESC';
+    const [rows] = await pool.query(query, params);
     res.json({ success: true, data: rows });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
+// GET /api/users/me — current user profile
+router.get('/me', authMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT id, full_name, dob, phone, address, email, role, status, created_at FROM users WHERE id=?',
+      [req.user.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
+    res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/users/pending — admin: get pending profile requests
+router.get('/pending', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "SELECT id, full_name, dob, phone, address, email, status, created_at FROM users WHERE status='pending' AND role='user' ORDER BY created_at DESC"
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PUT /api/users/:id/status — admin: approve/reject
 router.put('/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
   const { status, reason } = req.body;
   try {
     const [rows] = await pool.query('SELECT * FROM users WHERE id=?', [req.params.id]);
     const user = rows[0];
     await pool.query('UPDATE users SET status=? WHERE id=?', [status, req.params.id]);
+    
     let smsMessage = "";
     if (status === 'approved') {
-      smsMessage = "Your Coach Services profile has been approved!";
+      smsMessage = "Coach Services Co: Your profile has been APPROVED.";
     } else if (status === 'rejected') {
-      smsMessage = `Your profile was rejected. Reason: ${reason || 'Incomplete info'}.`;
+      smsMessage = `Coach Services Co: Your profile was REJECTED. Reason: ${reason || 'Incomplete info'}`;
     }
     if (smsMessage && user.phone) await sendSMS(user.phone, smsMessage);
-    res.json({ success: true, message: 'Status updated' });
+    
+    res.json({ success: true, message: `User status updated to ${status}` });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
