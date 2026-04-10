@@ -2,75 +2,56 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
-const { sendSMS } = require('../utils/sms');
 
-// GET /api/bookings
+// GET /api/vehicles — get all vehicles
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    let query = `
-      SELECT b.*, u.full_name AS user_name, u.phone AS user_phone,
-             v.name AS vehicle_name, r.pickup_location, r.dropoff_location
-      FROM bookings b
-      LEFT JOIN users u ON b.user_id = u.id
-      LEFT JOIN vehicles v ON b.vehicle_id = v.id
-      LEFT JOIN routes r ON b.route_id = r.id
-    `;
-    const params = [];
-    if (req.user.role !== 'admin') {
-      query += ' WHERE b.user_id=?';
-      params.push(req.user.id);
-    }
-    query += ' ORDER BY b.created_at DESC';
-    const [rows] = await pool.query(query, params);
+    const [rows] = await pool.query('SELECT * FROM vehicles ORDER BY created_at DESC');
     res.json({ success: true, data: rows });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// POST /api/bookings
-router.post('/', authMiddleware, async (req, res) => {
-  const { route_id, vehicle_id, booking_type, passenger_count, passengers } = req.body;
-  const [routeRows] = await pool.query('SELECT is_closed FROM routes WHERE id=?', [route_id]);
-  if (routeRows.length > 0 && routeRows[0].is_closed) {
-    return res.status(403).json({ success: false, message: 'This route is currently closed for bookings.' });
+// POST /api/vehicles — admin: create vehicle
+router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
+  const { name, seats, driver_name, plate_number } = req.body;
+  if (!name || !seats || !driver_name || !plate_number) {
+    return res.status(400).json({ success: false, message: 'All fields are required' });
   }
   try {
     const [result] = await pool.query(
-      'INSERT INTO bookings (user_id, route_id, vehicle_id, booking_type, passenger_count, status) VALUES (?,?,?,?,?,?)',
-      [req.user.id, route_id, vehicle_id, booking_type, passenger_count, 'pending']
+      'INSERT INTO vehicles (name, seats, driver_name, plate_number) VALUES (?,?,?,?)',
+      [name, seats, driver_name, plate_number]
     );
-    const bookingId = result.insertId;
-    if (passengers && Array.isArray(passengers)) {
-      for (const p of passengers) {
-        await pool.query(
-          'INSERT INTO booking_passengers (booking_id, passenger_name, passenger_phone) VALUES (?,?,?)',
-          [bookingId, p.name, p.phone]
-        );
-      }
+    res.status(201).json({ success: true, message: 'Vehicle created', id: result.insertId });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ success: false, message: 'Plate number already exists' });
     }
-    res.status(201).json({ success: true, message: 'Booking created', id: bookingId });
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PUT /api/vehicles/:id — admin: update vehicle
+router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  const { name, seats, driver_name, plate_number, status } = req.body;
+  try {
+    await pool.query(
+      'UPDATE vehicles SET name=?, seats=?, driver_name=?, plate_number=?, status=? WHERE id=?',
+      [name, seats, driver_name, plate_number, status || 'active', req.params.id]
+    );
+    res.json({ success: true, message: 'Vehicle updated successfully' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// PUT /api/bookings/:id/status
-router.put('/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
-  const { status } = req.body;
+// DELETE /api/vehicles/:id — admin: delete vehicle
+router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    await pool.query('UPDATE bookings SET status=? WHERE id=?', [status, req.params.id]);
-    if (status === 'confirmed') {
-      const [routeData] = await pool.query('SELECT r.pickup_location, r.dropoff_location FROM bookings b JOIN routes r ON b.route_id=r.id WHERE b.id=?', [req.params.id]);
-      const [passengers] = await pool.query('SELECT passenger_phone FROM booking_passengers WHERE booking_id=?', [req.params.id]);
-      const [mainUser] = await pool.query('SELECT u.phone FROM bookings b JOIN users u ON b.user_id=u.id WHERE b.id=?', [req.params.id]);
-      const smsText = `Your booking for ${routeData[0].pickup_location} to ${routeData[0].dropoff_location} is confirmed. Please be 15 mins early.`;
-      if (mainUser[0]?.phone) await sendSMS(mainUser[0].phone, smsText);
-      for (const p of passengers) {
-        if (p.passenger_phone) await sendSMS(p.passenger_phone, smsText);
-      }
-    }
-    res.json({ success: true, message: 'Booking status updated' });
+    await pool.query('DELETE FROM vehicles WHERE id=?', [req.params.id]);
+    res.json({ success: true, message: 'Vehicle deleted' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
