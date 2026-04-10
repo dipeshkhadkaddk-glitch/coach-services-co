@@ -3,7 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { pool } = require('../config/db');
-const { emailProfileRequested } = require('../utils/email');
+
 require('dotenv').config();
 
 // POST /api/auth/register — submit profile request
@@ -22,9 +22,8 @@ router.post('/register', async (req, res) => {
       'INSERT INTO users (full_name, dob, phone, address, email, password_hash, role, status) VALUES (?,?,?,?,?,?,?,?)',
       [full_name, dob || null, phone, address || '', email, hash, 'user', 'pending']
     );
-    const userId = result.insertId;
 
-    // Notify admin
+    // Notify admin via In-App Notification
     const [admins] = await pool.query("SELECT id FROM users WHERE role='admin'");
     for (const admin of admins) {
       await pool.query(
@@ -32,9 +31,6 @@ router.post('/register', async (req, res) => {
         [admin.id, `New profile request from ${full_name} (${email})`, 'profile']
       );
     }
-    
-    // Notify user via Email
-    await emailProfileRequested(full_name, email);
 
     res.json({ success: true, message: 'Profile request submitted. Awaiting admin approval.' });
   } catch (err) {
@@ -73,13 +69,7 @@ router.post('/login', async (req, res) => {
     res.json({
       success: true,
       token,
-      user: {
-        id: user.id,
-        full_name: user.full_name,
-        email: user.email,
-        role: user.role,
-        phone: user.phone
-      }
+      user: { id: user.id, full_name: user.full_name, email: user.email, role: user.role, phone: user.phone }
     });
   } catch (err) {
     console.error(err);
