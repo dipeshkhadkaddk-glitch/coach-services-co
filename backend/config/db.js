@@ -87,6 +87,7 @@ const initializeDatabase = async () => {
         price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
         vehicle_id INT,
         status ENUM('active','inactive') DEFAULT 'active',
+        is_closed BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE SET NULL
       )
@@ -102,6 +103,7 @@ const initializeDatabase = async () => {
         event_date DATE NOT NULL,
         start_time TIME NOT NULL,
         end_time TIME NOT NULL,
+        is_closed BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
