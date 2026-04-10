@@ -6,62 +6,23 @@ const { sendSMS } = require('../utils/sms');
 
 // GET /api/bookings — admin: all bookings; user: own bookings
 router.get('/', authMiddleware, async (req, res) => {
-  const { type } = req.query;
   try {
     let query = `
-      SELECT b.*, u.full_name AS user_name, u.email AS user_email, u.phone AS user_phone,
-             v.name AS vehicle_name, v.plate_number,
-             r.pickup_location, r.dropoff_location, r.price
+      SELECT b.*, u.full_name AS user_name, u.phone AS user_phone,
+             v.name AS vehicle_name, r.pickup_location, r.dropoff_location
       FROM bookings b
       LEFT JOIN users u ON b.user_id = u.id
       LEFT JOIN vehicles v ON b.vehicle_id = v.id
       LEFT JOIN routes r ON b.route_id = r.id
     `;
     const params = [];
-    const conditions = [];
     if (req.user.role !== 'admin') {
-      conditions.push('b.user_id=?');
+      query += ' WHERE b.user_id=?';
       params.push(req.user.id);
     }
-    if (type) {
-      conditions.push('b.booking_type=?');
-      params.push(type);
-    }
-    if (conditions.length) query += ' WHERE ' + conditions.join(' AND ');
     query += ' ORDER BY b.created_at DESC';
     const [rows] = await pool.query(query, params);
-
-    // For each booking, attach passengers
-    for (const booking of rows) {
-      const [passengers] = await pool.query(
-        'SELECT * FROM booking_passengers WHERE booking_id=?', [booking.id]
-      );
-      booking.passengers = passengers;
-    }
     res.json({ success: true, data: rows });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// GET /api/bookings/:id
-router.get('/:id', authMiddleware, async (req, res) => {
-  try {
-    const [rows] = await pool.query(`
-      SELECT b.*, u.full_name AS user_name, u.email AS user_email, u.phone AS user_phone,
-             v.name AS vehicle_name, v.plate_number,
-             r.pickup_location, r.dropoff_location, r.price
-      FROM bookings b
-      LEFT JOIN users u ON b.user_id = u.id
-      LEFT JOIN vehicles v ON b.vehicle_id = v.id
-      LEFT JOIN routes r ON b.route_id = r.id
-      WHERE b.id=?
-    `, [req.params.id]);
-    if (rows.length === 0) return res.status(404).json({ success: false, message: 'Booking not found' });
-    const booking = rows[0];
-    const [passengers] = await pool.query('SELECT * FROM booking_passengers WHERE booking_id=?', [booking.id]);
-    booking.passengers = passengers;
-    res.json({ success: true, data: booking });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -69,109 +30,56 @@ router.get('/:id', authMiddleware, async (req, res) => {
 
 // POST /api/bookings — user: create booking
 router.post('/', authMiddleware, async (req, res) => {
-  const { vehicle_id, route_id, booking_type, passenger_count, passengers, notes } = req.body;
-  if (!vehicle_id || !route_id || !booking_type) {
-    return res.status(400).json({ success: false, message: 'Vehicle, route and booking type are required' });
+  const { route_id, vehicle_id, booking_type, passenger_count, passengers } = req.body;
+  
+  // Check if route is closed
+  const [routeRows] = await pool.query('SELECT is_closed FROM routes WHERE id=?', [route_id]);
+  if (routeRows.length > 0 && routeRows[0].is_closed) {
+    return res.status(403).json({ success: false, message: 'This route is currently closed for bookings.' });
   }
-  if (!['individual', 'group'].includes(booking_type)) {
-    return res.status(400).json({ success: false, message: 'Booking type must be individual or group' });
-  }
+
   try {
-    // Check vehicle capacity
-    const [vehicleRows] = await pool.query('SELECT * FROM vehicles WHERE id=?', [vehicle_id]);
-    if (vehicleRows.length === 0) return res.status(404).json({ success: false, message: 'Vehicle not found' });
-    const vehicle = vehicleRows[0];
-
-    // Check if route is closed
-    const [routeCheck] = await pool.query('SELECT is_closed FROM routes WHERE id=?', [route_id]);
-    if (routeCheck.length > 0 && routeCheck[0].is_closed) {
-      return res.status(400).json({ success: false, message: 'This route is currently closed for bookings' });
-    }
-
-    const count = parseInt(passenger_count) || 1;
-    if (count > vehicle.seats) {
-      return res.status(400).json({ success: false, message: `Vehicle only has ${vehicle.seats} seats` });
-    }
-
-    const [bookingResult] = await pool.query(
-      'INSERT INTO bookings (user_id, vehicle_id, route_id, booking_type, passenger_count, notes) VALUES (?,?,?,?,?,?)',
-      [req.user.id, vehicle_id, route_id, booking_type, count, notes || '']
+    const [result] = await pool.query(
+      'INSERT INTO bookings (user_id, route_id, vehicle_id, booking_type, passenger_count, status) VALUES (?,?,?,?,?,?)',
+      [req.user.id, route_id, vehicle_id, booking_type, passenger_count, 'pending']
     );
-    const bookingId = bookingResult.insertId;
+    const bookingId = result.insertId;
 
-    // Insert passengers
     if (passengers && Array.isArray(passengers)) {
       for (const p of passengers) {
         await pool.query(
-          'INSERT INTO booking_passengers (booking_id, passenger_name, passenger_phone, passenger_email) VALUES (?,?,?,?)',
-          [bookingId, p.name || '', p.phone || '', p.email || null]
+          'INSERT INTO booking_passengers (booking_id, passenger_name, passenger_phone) VALUES (?,?,?)',
+          [bookingId, p.name, p.phone]
         );
       }
     }
-
-    // Notify admin
-    const [admins] = await pool.query("SELECT id FROM users WHERE role='admin'");
-    for (const admin of admins) {
-      await pool.query(
-        'INSERT INTO notifications (user_id, message, type) VALUES (?,?,?)',
-        [admin.id, `New ${booking_type} booking #${bookingId} from ${req.user.name}`, 'booking']
-      );
-    }
-
-    // Get route details
-    const [routeRows] = await pool.query('SELECT * FROM routes WHERE id=?', [route_id]);
-    const route = routeRows[0];
-
-    // Notify user via in-app notification
-    const userMsg = `Your ${booking_type} booking #${bookingId} from ${route?.pickup_location} to ${route?.dropoff_location} is pending confirmation.`;
-    await pool.query('INSERT INTO notifications (user_id, message, type) VALUES (?,?,?)', [req.user.id, userMsg, 'booking']);
-
-    res.status(201).json({ success: true, message: 'Booking submitted successfully', id: bookingId });
+    res.status(201).json({ success: true, message: 'Booking created', id: bookingId });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// PUT /api/bookings/:id/status — admin: confirm/cancel booking
+// PUT /api/bookings/:id/status — admin: confirm
 router.put('/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
   const { status } = req.body;
-  if (!['confirmed', 'cancelled', 'pending'].includes(status)) {
-    return res.status(400).json({ success: false, message: 'Invalid status' });
-  }
   try {
-    const [rows] = await pool.query('SELECT b.*, u.phone, u.id AS uid, r.pickup_location, r.dropoff_location FROM bookings b JOIN users u ON b.user_id=u.id LEFT JOIN routes r ON b.route_id=r.id WHERE b.id=?', [req.params.id]);
-    if (rows.length === 0) return res.status(404).json({ success: false, message: 'Booking not found' });
-    const booking = rows[0];
     await pool.query('UPDATE bookings SET status=? WHERE id=?', [status, req.params.id]);
-    const msg = `Your booking #${req.params.id} has been ${status}.`;
-    await pool.query('INSERT INTO notifications (user_id, message, type) VALUES (?,?,?)', [booking.uid, msg, 'booking']);
-    // SMS Notifications
-    const [userInfo] = await pool.query('SELECT full_name, phone FROM users WHERE id=?', [booking.uid]);
-    const mainBookerName = userInfo.length > 0 ? userInfo[0].full_name : 'Unknown User';
-    const mainBookerPhone = userInfo.length > 0 ? userInfo[0].phone : null;
-    
+
     if (status === 'confirmed') {
-      const [passengers] = await pool.query('SELECT passenger_name, passenger_phone FROM booking_passengers WHERE booking_id=?', [req.params.id]);
+      const [routeData] = await pool.query('SELECT r.pickup_location, r.dropoff_location FROM bookings b JOIN routes r ON b.route_id=r.id WHERE b.id=?', [req.params.id]);
+      const [passengers] = await pool.query('SELECT passenger_phone FROM booking_passengers WHERE booking_id=?', [req.params.id]);
+      const [mainUser] = await pool.query('SELECT u.phone FROM bookings b JOIN users u ON b.user_id=u.id WHERE b.id=?', [req.params.id]);
+
+      const smsText = `Your booking for ${routeData[0].pickup_location} to ${routeData[0].dropoff_location} is confirmed. Please be 15 minutes early for your schedule.`;
       
-      const smsMessage = `Coach Services Co: Your booking made by ${mainBookerName} for ${booking.pickup_location || 'Pickup'} to ${booking.dropoff_location || 'Dropoff'} is confirmed. Please be 15 minutes early of your scheduled time.`;
-      
-      // Track sent numbers to avoid duplicates
-      const sentNumbers = new Set();
-      
-      if (mainBookerPhone) {
-        await sendSMS(mainBookerPhone, smsMessage);
-        sentNumbers.add(mainBookerPhone);
+      // Notify main booker
+      if (mainUser[0]?.phone) await sendSMS(mainUser[0].phone, smsText);
+      // Notify all other passengers
+      for (const p of passengers) {
+        if (p.passenger_phone) await sendSMS(p.passenger_phone, smsText);
       }
-      for (const pax of passengers) {
-        if (pax.passenger_phone && !sentNumbers.has(pax.passenger_phone)) {
-          await sendSMS(pax.passenger_phone, smsMessage);
-          sentNumbers.add(pax.passenger_phone);
-        }
-      }
-    } else if (status === 'cancelled' && mainBookerPhone) {
-       await sendSMS(mainBookerPhone, `Coach Services Co: Your booking #${req.params.id} has been cancelled.`);
     }
-    res.json({ success: true, message: `Booking ${status} successfully` });
+    res.json({ success: true, message: 'Booking status updated' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
