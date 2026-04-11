@@ -73,11 +73,17 @@ router.put('/:id/toggle-close', authMiddleware, adminMiddleware, async (req, res
   }
 });
 
-// GET /api/routes/:id/passengers — admin: get passenger manifest
+// GET /api/routes/:id/passengers — admin: get passenger manifest (FIXED QUERY)
 router.get('/:id/passengers', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.query(`
-      SELECT p.passenger_name, p.passenger_phone, p.passenger_email, b.id AS booking_id, u.full_name AS booker_name
+      SELECT 
+        p.passenger_name, 
+        p.passenger_phone AS phone, 
+        p.passenger_email, 
+        b.id AS booking_id, 
+        b.booking_type AS type,
+        u.full_name AS main_booker
       FROM booking_passengers p
       JOIN bookings b ON p.booking_id = b.id
       JOIN users u ON b.user_id = u.id
