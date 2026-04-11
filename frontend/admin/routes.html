@@ -41,7 +41,7 @@
         <button class="hamburger" id="hamburger">☰</button>
         <div>
           <div class="breadcrumb"><a href="/admin/dashboard.html">Dashboard</a><span class="sep">›</span><span>Routes & Pricing</span></div>
-          <div class="page-title">Routes & Pricing</div>
+          <div class="page-title">Routes & Pricing Management</div>
         </div>
       </div>
       <div class="topbar-right">
@@ -52,24 +52,24 @@
     <main class="page-content">
       <div class="page-header">
         <div>
-          <h2>Routes & Fixed Pricing</h2>
-          <p>Set pickup/drop-off locations and fixed prices for each route</p>
+          <h2>Manage Routes</h2>
+          <p>Configure shuttle routes and print passenger manifests</p>
         </div>
-        <button class="btn btn-primary" onclick="openAddModal()">+ Add Route</button>
+        <button class="btn btn-primary" onclick="openAddModal()">+ Add New Route</button>
       </div>
 
       <div class="card">
         <div class="card-header">
-          <h3 class="card-title">All Routes</h3>
+          <h3 class="card-title">Active Routes</h3>
           <span id="route-count" class="text-muted" style="font-size:13px;"></span>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
-            <tr><th>Pickup</th><th>Drop-off</th><th>Price</th><th>Vehicle</th><th>Status</th><th>Actions</th></tr>
+              <tr><th>Pickup / Drop-off</th><th>Price</th><th>Vehicle</th><th>Booking Status</th><th>Actions</th></tr>
             </thead>
             <tbody id="routes-table">
-              <tr><td colspan="6" class="text-center" style="padding:40px;color:var(--text-muted);">Loading...</td></tr>
+              <tr><td colspan="5" class="text-center" style="padding:40px;">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -78,32 +78,28 @@
   </div>
 </div>
 
-<!-- Modal for Add/Edit -->
+<!-- Add/Edit Modal -->
 <div class="modal-overlay" id="route-modal">
   <div class="modal">
     <div class="modal-header">
-      <h3 class="modal-title" id="route-modal-title">Add Route</h3>
+      <h3 class="modal-title" id="route-modal-title">Edit Route</h3>
       <button class="modal-close" onclick="closeModal('route-modal')">×</button>
     </div>
     <div class="modal-body">
       <form id="route-form" onsubmit="saveRoute(event)">
         <input type="hidden" id="route-id"/>
-        <div class="form-group">
-          <label>Pickup Location</label>
-          <input type="text" id="r-pickup" class="form-control" required/>
-        </div>
-        <div class="form-group">
-          <label>Drop-off Location</label>
-          <input type="text" id="r-dropoff" class="form-control" required/>
-        </div>
+        <div class="form-group"><label>Pickup Location</label><input type="text" id="r-pickup" class="form-control" required/></div>
+        <div class="form-group"><label>Drop-off Location</label><input type="text" id="r-dropoff" class="form-control" required/></div>
         <div class="form-row">
-          <div class="form-group"><label>Price (A$)</label><input type="number" id="r-price" class="form-control" step="0.01" required/></div>
-          <div class="form-group"><label>Vehicle</label><select id="r-vehicle" class="form-control"><option value="">— None —</option></select></div>
+            <div class="form-group"><label>Price (A$)</label><input type="number" id="r-price" class="form-control" step="0.01" required/></div>
+            <div class="form-group"><label>Assign Vehicle</label><select id="r-vehicle" class="form-control"><option value="">— Select Vehicle —</option></select></div>
         </div>
+        <div class="form-group" id="status-group" style="display:none;"><label>Route Status</label><select id="r-status" class="form-control"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
       </form>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-primary" onclick="document.getElementById('route-form').requestSubmit()">Save</button>
+      <button class="btn btn-outline" onclick="closeModal('route-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="document.getElementById('route-form').requestSubmit()" id="save-btn">Save Route</button>
     </div>
   </div>
 </div>
@@ -112,37 +108,75 @@
 <script src="/js/app.js"></script>
 <script>
 const currentUser = requireAuth('admin');
-if (currentUser) { populateSidebar(currentUser); initSidebar(); loadRoutes(); loadVehiclesForSelect(); loadNotifications(); }
+if (currentUser) { populateSidebar(currentUser); initSidebar(); loadRoutes(); loadVehicles(); loadNotifications(); }
 
-async function loadVehiclesForSelect() {
+async function loadVehicles() {
   const res = await api.getVehicles();
   if (res.ok) {
     const sel = document.getElementById('r-vehicle');
-    (res.data.data || []).forEach(v => sel.innerHTML += `<option value="${v.id}">${v.name}</option>`);
+    (res.data.data || []).filter(v => v.status === 'active').forEach(v => {
+      sel.innerHTML += `<option value="${v.id}">${v.name} (${v.plate_number})</option>`;
+    });
   }
 }
 
 async function loadRoutes() {
   const tbody = document.getElementById('routes-table');
   const res = await api.getAllRoutes();
-  if (!res.ok) return;
+  if (!res.ok) { tbody.innerHTML = '<tr><td colspan="5">Error loading data</td></tr>'; return; }
   const routes = res.data.data || [];
+  document.getElementById('route-count').textContent = routes.length + ' routes';
+  
   tbody.innerHTML = routes.map(r => `
     <tr>
-      <td>${r.pickup_location}</td>
-      <td>${r.dropoff_location}</td>
+      <td><div style="font-weight:600;">${r.pickup_location}</div><div style="font-size:12px;color:var(--text-muted);">→ ${r.dropoff_location}</div></td>
       <td>A$${r.price}</td>
       <td>${r.vehicle_name || '—'}</td>
-      <td>${r.is_closed ? '🔒 Closed' : '🟢 Open'}</td>
+      <td>${r.is_closed ? '<span class="badge" style="background:#ef44441a;color:#ef4444;">🔒 Closed</span>' : '<span class="badge" style="background:#10b9811a;color:#10b981;">🟢 Open</span>'}</td>
       <td>
         <div class="action-btns">
-          <button class="btn btn-outline btn-sm" onclick="editRoute(${JSON.stringify(r).replace(/"/g,'&quot;')})">✏️</button>
-          <button class="btn btn-sm" onclick="toggleClose(${r.id})">${r.is_closed ? '🔓 Open' : '🔒 Close'}</button>
-          <button class="btn btn-outline btn-sm" onclick="printManifest(${r.id}, '${r.pickup_location} → ${r.dropoff_location}')" title="Print Manifest">🖨️</button>
+          <button class="btn btn-outline btn-sm" onclick='editRoute(${JSON.stringify(r)})'>✏️</button>
+          <button class="btn btn-sm btn-outline" onclick="toggleClose(${r.id})">${r.is_closed ? '🔓 Open' : '🔒 Close'}</button>
+          <button class="btn btn-sm btn-primary" onclick="printManifest(${r.id}, '${r.pickup_location} to ${r.dropoff_location}')" title="Print All Passengers">🖨️ Manifest</button>
           <button class="btn btn-danger btn-sm" onclick="deleteRoute(${r.id})">🗑</button>
         </div>
       </td>
     </tr>`).join('');
+}
+
+function openAddModal() {
+  document.getElementById('route-modal-title').textContent = 'Add New Route';
+  document.getElementById('route-id').value = '';
+  document.getElementById('route-form').reset();
+  document.getElementById('status-group').style.display = 'none';
+  openModal('route-modal');
+}
+
+function editRoute(r) {
+  document.getElementById('route-modal-title').textContent = 'Edit Route';
+  document.getElementById('route-id').value = r.id;
+  document.getElementById('r-pickup').value = r.pickup_location;
+  document.getElementById('r-dropoff').value = r.dropoff_location;
+  document.getElementById('r-price').value = r.price;
+  document.getElementById('r-vehicle').value = r.vehicle_id || '';
+  document.getElementById('r-status').value = r.status;
+  document.getElementById('status-group').style.display = 'block';
+  openModal('route-modal');
+}
+
+async function saveRoute(e) {
+  e.preventDefault();
+  const id = document.getElementById('route-id').value;
+  const data = {
+    pickup_location: document.getElementById('r-pickup').value,
+    dropoff_location: document.getElementById('r-dropoff').value,
+    price: document.getElementById('r-price').value,
+    vehicle_id: document.getElementById('r-vehicle').value || null,
+    status: document.getElementById('r-status').value || 'active'
+  };
+  const res = id ? await api.updateRoute(id, data) : await api.createRoute(data);
+  if (res.ok) { toast.success('Saved!'); closeModal('route-modal'); loadRoutes(); }
+  else { toast.error(res.data.message); }
 }
 
 async function toggleClose(id) {
@@ -150,29 +184,55 @@ async function toggleClose(id) {
   if (res.ok) { toast.success('Status updated'); loadRoutes(); }
 }
 
+async function deleteRoute(id) {
+  if (confirm('Delete this route?')) {
+    const res = await api.deleteRoute(id);
+    if (res.ok) { toast.success('Deleted'); loadRoutes(); }
+  }
+}
+
 async function printManifest(routeId, routeName) {
   const res = await api.getPassengerManifest(routeId);
-  if (!res.ok) return toast.error('Failed to load list');
+  if (!res.ok) return toast.error('Empty Manifest');
   const passengers = res.data.data || [];
   
   const content = `
     <html>
-    <head><title>Passenger List</title><style>body{font-family:sans-serif;padding:40px;} table{width:100%;border-collapse:collapse;} th,td{padding:10px;border:1px solid #ddd;}</style></head>
-    <body>
-      <h2>🚌 Passenger Manifest: ${routeName}</h2>
-      <p>Total Confirmed Passengers: ${passengers.length}</p>
+    <head>
+      <title>Manifest: ${routeName}</title>
+      <style>
+        body { font-family: sans-serif; padding: 40px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { background: #1e3a5f; color: white; padding: 12px; text-align: left; }
+        td { padding: 10px; border-bottom: 1px solid #ddd; font-size: 14px; }
+        .header { border-bottom: 2px solid #1e3a5f; padding-bottom: 10px; margin-bottom: 20px; }
+      </style>
+    </head>
+    <body onload="window.print()">
+      <div class="header">
+        <h1>Coach Services Co. — Passenger Manifest</h1>
+        <p><strong>Route:</strong> ${routeName}</p>
+        <p><strong>Total Passengers:</strong> ${passengers.length}</p>
+      </div>
       <table>
-        <thead><tr><th>Name</th><th>Phone</th><th>Booked By</th><th>Type</th></tr></thead>
-        <tbody>${passengers.map(p => `<tr><td>${p.passenger_name}</td><td>${p.phone}</td><td>${p.main_booker}</td><td>${p.type}</td></tr>`).join('')}</tbody>
+        <thead><tr><th>#</th><th>Passenger Name</th><th>Phone</th><th>Main Booker</th><th>Type</th></tr></thead>
+        <tbody>
+          ${passengers.map((p, i) => `
+            <tr>
+              <td>${i+1}</td>
+              <td><strong>${p.passenger_name}</strong></td>
+              <td>${p.phone || '—'}</td>
+              <td>${p.main_booker}</td>
+              <td>${p.type}</td>
+            </tr>
+          `).join('')}
+        </tbody>
       </table>
-      <script>window.print();</scrip` + `t>
     </body>
     </html>`;
   const win = window.open('', '_blank');
   win.document.write(content);
 }
-
-/* Add your basic modal open/edit functions here as usual */
 </script>
 </body>
 </html>
