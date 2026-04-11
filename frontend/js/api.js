@@ -36,7 +36,7 @@ const api = {
   updateMe: (data) => api.put('/users/me', data),
   getAllUsers: (search = '') => api.get(`/users${search ? `?search=${encodeURIComponent(search)}` : ''}`),
   getPendingUsers: () => api.get('/users/pending'),
-  updateUserStatus: (id, status) => api.put(`/users/${id}/status`, { status }),
+  updateUserStatus: (id, status, reason = '') => api.put(`/users/${id}/status`, { status, reason }),
   deleteUser: (id) => api.delete(`/users/${id}`),
 
   // Vehicles
@@ -47,16 +47,12 @@ const api = {
   deleteVehicle: (id) => api.delete(`/vehicles/${id}`),
 
   // Routes
-  searchRoutes: (pickup = '', dropoff = '') => {
-    const params = new URLSearchParams();
-    if (pickup) params.set('pickup', pickup);
-    if (dropoff) params.set('dropoff', dropoff);
-    return api.get(`/routes${params.toString() ? '?' + params.toString() : ''}`);
-  },
   getAllRoutes: () => api.get('/routes'),
   createRoute: (data) => api.post('/routes', data),
   updateRoute: (id, data) => api.put(`/routes/${id}`, data),
   deleteRoute: (id) => api.delete(`/routes/${id}`),
+  toggleRouteClose: (id) => api.put(`/routes/${id}/toggle-close`, {}),
+  getPassengerManifest: (routeId) => api.get(`/routes/${routeId}/passengers`),
 
   // Events
   getEvents: () => api.get('/events'),
