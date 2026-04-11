@@ -22,7 +22,45 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
-// PUT /api/routes/:id/toggle-close — Close/Open bookings
+// POST /api/routes — admin: create route
+router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
+  const { pickup_location, dropoff_location, price, vehicle_id } = req.body;
+  try {
+    const [result] = await pool.query(
+      'INSERT INTO routes (pickup_location, dropoff_location, price, vehicle_id) VALUES (?,?,?,?)',
+      [pickup_location, dropoff_location, price, vehicle_id || null]
+    );
+    res.status(201).json({ success: true, message: 'Route created', id: result.insertId });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PUT /api/routes/:id — admin: update route
+router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  const { pickup_location, dropoff_location, price, vehicle_id, status } = req.body;
+  try {
+    await pool.query(
+      'UPDATE routes SET pickup_location=?, dropoff_location=?, price=?, vehicle_id=?, status=? WHERE id=?',
+      [pickup_location, dropoff_location, price, vehicle_id || null, status || 'active', req.params.id]
+    );
+    res.json({ success: true, message: 'Route updated' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// DELETE /api/routes/:id — admin: delete route
+router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM routes WHERE id=?', [req.params.id]);
+    res.json({ success: true, message: 'Route deleted' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PUT /api/routes/:id/toggle-close — admin: toggle open/closed for bookings
 router.put('/:id/toggle-close', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT is_closed FROM routes WHERE id=?', [req.params.id]);
@@ -35,7 +73,7 @@ router.put('/:id/toggle-close', authMiddleware, adminMiddleware, async (req, res
   }
 });
 
-// GET /api/routes/:id/passengers — Get manifest
+// GET /api/routes/:id/passengers — admin: get passenger manifest
 router.get('/:id/passengers', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.query(`
