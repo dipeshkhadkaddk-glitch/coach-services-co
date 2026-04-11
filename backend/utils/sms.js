@@ -1,34 +1,36 @@
 const twilio = require('twilio');
 
-// Load values from Render surroundings (Environment Variables)
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+let client = null;
+if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+  client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+}
 
-// Initialize Twilio client
-const client = (accountSid && authToken) ? new twilio(accountSid, authToken) : null;
-
-/**
- * Sends an SMS using Twilio
- * @param {string} to - Recipient phone number (e.g., +61400000000)
- * @param {string} body - The message content
- */
 exports.sendSMS = async (to, body) => {
-  // Check if credentials are set
-  if (!client || !fromNumber) {
-    console.log(`\n[SMS SKIPPED] Credentials missing in Render/env settings.`);
-    console.log(`To: ${to}\nMessage: ${body}\n`);
+  if (!client) {
+    console.log(`[SMS SKIPPED] Credentials missing. To: ${to}, Msg: ${body}`);
     return;
   }
 
+  // --- AUTO-FORMATTING LOGIC ---
+  let formattedTo = to.replace(/[\s\-\(\)]/g, ''); // Remove spaces, dashes, brackets
+  
+  if (formattedTo.startsWith('0')) {
+    // If it starts with 0 (like 0493...), replace it with +61
+    formattedTo = '+61' + formattedTo.substring(1);
+  } else if (!formattedTo.startsWith('+')) {
+    // If it doesn't have a +, assume it needs +61
+    formattedTo = '+61' + formattedTo;
+  }
+  // -----------------------------
+
   try {
-    const message = await client.messages.create({
+    const info = await client.messages.create({
       body: body,
-      from: fromNumber,
-      to: to
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: formattedTo
     });
-    console.log(`[SMS SENT] Successfully sent to ${to}. SID: ${message.sid}`);
+    console.log(`[SMS SENT] to ${formattedTo}. SID: ${info.sid}`);
   } catch (err) {
-    console.error(`[SMS ERROR] Failed to send to ${to}: ${err.message}`);
+    console.error(`[SMS ERROR] Failed to send to ${formattedTo}: ${err.message}`);
   }
 };
