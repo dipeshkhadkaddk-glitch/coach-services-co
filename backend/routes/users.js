@@ -23,7 +23,7 @@ router.get('/', authMiddleware, adminMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/users/me — current user profile
+// GET /api/users/me — own profile
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -66,6 +66,16 @@ router.put('/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
     if (smsMessage && user.phone) await sendSMS(user.phone, smsMessage);
     
     res.json({ success: true, message: `User status updated to ${status}` });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// DELETE /api/users/:id — admin: remove user
+router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    await pool.query("DELETE FROM users WHERE id=? AND role='user'", [req.params.id]);
+    res.json({ success: true, message: 'User removed successfully' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
