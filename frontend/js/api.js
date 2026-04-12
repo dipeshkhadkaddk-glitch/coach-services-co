@@ -47,6 +47,12 @@ const api = {
   deleteVehicle: (id) => api.delete(`/vehicles/${id}`),
 
   // Routes
+  searchRoutes: (pickup = '', dropoff = '') => {
+    const params = new URLSearchParams();
+    if (pickup) params.set('pickup', pickup);
+    if (dropoff) params.set('dropoff', dropoff);
+    return api.get(`/routes${params.toString() ? '?' + params.toString() : ''}`);
+  },
   getAllRoutes: () => api.get('/routes'),
   createRoute: (data) => api.post('/routes', data),
   updateRoute: (id, data) => api.put(`/routes/${id}`, data),
