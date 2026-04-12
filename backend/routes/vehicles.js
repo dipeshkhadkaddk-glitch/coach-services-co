@@ -13,6 +13,17 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/vehicles/:id
+router.get('/:id', authMiddleware, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM vehicles WHERE id=?', [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ success: false, message: 'Vehicle not found' });
+    res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // POST /api/vehicles — admin: create vehicle
 router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
   const { name, seats, driver_name, plate_number } = req.body;

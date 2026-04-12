@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
-const { sendSMS } = require('../utils/sms');
+const { emailProfileApproved, emailProfileRejected } = require('../utils/email');
 
 // GET /api/users — admin: get all users
 router.get('/', authMiddleware, adminMiddleware, async (req, res) => {
@@ -23,7 +23,7 @@ router.get('/', authMiddleware, adminMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/users/me — own profile
+// GET /api/users/me — current user profile
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -32,6 +32,23 @@ router.get('/me', authMiddleware, async (req, res) => {
     );
     if (rows.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
     res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PUT /api/users/me — update own profile (name, address, phone only)
+router.put('/me', authMiddleware, async (req, res) => {
+  const { full_name, address, phone } = req.body;
+  if (!full_name || !phone) {
+    return res.status(400).json({ success: false, message: 'Full name and phone are required' });
+  }
+  try {
+    await pool.query(
+      'UPDATE users SET full_name=?, address=?, phone=? WHERE id=?',
+      [full_name, address || '', phone, req.user.id]
+    );
+    res.json({ success: true, message: 'Profile updated successfully' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -49,22 +66,28 @@ router.get('/pending', authMiddleware, adminMiddleware, async (req, res) => {
   }
 });
 
-// PUT /api/users/:id/status — admin: approve/reject
+// PUT /api/users/:id/status — admin: approve/reject/deactivate
 router.put('/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
-  const { status, reason } = req.body;
+  const { status } = req.body;
+  if (!['approved', 'rejected', 'pending'].includes(status)) {
+    return res.status(400).json({ success: false, message: 'Invalid status' });
+  }
   try {
     const [rows] = await pool.query('SELECT * FROM users WHERE id=?', [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
     const user = rows[0];
     await pool.query('UPDATE users SET status=? WHERE id=?', [status, req.params.id]);
-    
-    let smsMessage = "";
+    // Notify user
+    const msg = status === 'approved'
+      ? 'Your profile has been approved! You can now log in and book rides.'
+      : `Your profile request has been ${status}.`;
+    await pool.query('INSERT INTO notifications (user_id, message, type) VALUES (?,?,?)', [user.id, msg, 'profile']);
+    // Email notification
     if (status === 'approved') {
-      smsMessage = "Coach Services Co: Your profile has been APPROVED.";
+      await emailProfileApproved(user.full_name, user.email);
     } else if (status === 'rejected') {
-      smsMessage = `Coach Services Co: Your profile was REJECTED. Reason: ${reason || 'Incomplete info'}`;
+      await emailProfileRejected(user.full_name, user.email);
     }
-    if (smsMessage && user.phone) await sendSMS(user.phone, smsMessage);
-    
     res.json({ success: true, message: `User status updated to ${status}` });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
