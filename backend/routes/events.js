@@ -24,32 +24,42 @@ router.get('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/events — admin: add event
+// POST /api/events — admin: add event (with duplicate prevention)
 router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
   const { name, venue_name, venue_address, event_date, start_time, end_time } = req.body;
+  
   if (!name || !venue_name || !venue_address || !event_date || !start_time || !end_time) {
-    return res.status(400).json({ success: false, message: 'All fields are required' });
+    return res.status(400).json({ success: false, message: 'Missing required Fields: Please ensure all details are filled.' });
   }
+
   if (start_time >= end_time) {
-    return res.status(400).json({ success: false, message: 'Start time must be before end time' });
+    return res.status(400).json({ success: false, message: 'Start time must be before end time.' });
   }
+
   try {
+    // Prevent duplicate events
+    const [existing] = await pool.query(
+      'SELECT id FROM events WHERE name=? AND venue_name=? AND event_date=?',
+      [name, venue_name, event_date]
+    );
+
+    if (existing.length > 0) {
+      return res.status(400).json({ success: false, message: 'Duplicate Entry: This event already exists at this venue on this date.' });
+    }
+
     const [result] = await pool.query(
       'INSERT INTO events (name, venue_name, venue_address, event_date, start_time, end_time) VALUES (?,?,?,?,?,?)',
       [name, venue_name, venue_address, event_date, start_time, end_time]
     );
-    res.status(201).json({ success: true, message: 'Event added successfully', id: result.insertId });
+    res.status(201).json({ success: true, message: 'Event and Venue stored securely.', id: result.insertId });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: 'Database Error: ' + err.message });
   }
 });
 
-// PUT /api/events/:id — admin: update event
+// PUT & DELETE routes...
 router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   const { name, venue_name, venue_address, event_date, start_time, end_time } = req.body;
-  if (start_time >= end_time) {
-    return res.status(400).json({ success: false, message: 'Start time must be before end time' });
-  }
   try {
     await pool.query(
       'UPDATE events SET name=?, venue_name=?, venue_address=?, event_date=?, start_time=?, end_time=? WHERE id=?',
@@ -61,7 +71,6 @@ router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   }
 });
 
-// DELETE /api/events/:id — admin
 router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     await pool.query('DELETE FROM events WHERE id=?', [req.params.id]);
