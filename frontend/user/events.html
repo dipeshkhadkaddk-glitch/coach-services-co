@@ -1,129 +1,61 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Events — Coach Services Co.</title>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Olympic Events — Coach Services Co.</title>
   <link rel="stylesheet" href="/css/style.css"/>
 </head>
 <body>
-<div id="sidebar-overlay" class="sidebar-overlay"></div>
 <div class="app-layout">
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar-brand">
-      <div class="brand-icon">🚌</div>
-      <div class="brand-text"><h2>Coach Services</h2><span>Brisbane Olympics 2032</span></div>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-section-label">Main</div>
-      <a href="/user/dashboard.html" class="nav-item"><span class="nav-icon">🏠</span> Dashboard</a>
-      <a href="/user/events.html" class="nav-item active"><span class="nav-icon">🏅</span> Events</a>
-      <a href="/user/search.html" class="nav-item"><span class="nav-icon">🔍</span> Search Vehicles</a>
-      <a href="/user/book.html" class="nav-item"><span class="nav-icon">🎫</span> Book a Ride</a>
-    </div>
-    <div class="sidebar-section" style="margin-top:12px;">
-      <div class="sidebar-section-label">Account</div>
-      <a href="/user/profile.html" class="nav-item"><span class="nav-icon">👤</span> My Profile</a>
-    </div>
-    <div class="sidebar-footer">
-      <div class="user-card">
-        <div class="user-avatar" id="sidebar-user-avatar">U</div>
-        <div class="user-info"><div class="name" id="sidebar-user-name">Loading...</div><div class="role" id="sidebar-user-role">user</div></div>
-        <button class="btn-logout" onclick="logout()" title="Logout">⏻</button>
-      </div>
-    </div>
-  </aside>
+  <!-- SIDEBAR -->
   <div class="main-content">
-    <header class="topbar">
-      <div class="topbar-left">
-        <button class="hamburger" id="hamburger">☰</button>
-        <div>
-          <div class="breadcrumb"><a href="/user/dashboard.html">Dashboard</a><span class="sep">›</span><span>Events</span></div>
-          <div class="page-title">Olympic Events</div>
-        </div>
-      </div>
-      <div class="topbar-right">
-        <button class="notif-btn" onclick="toggleNotifPanel()">🔔<span class="notif-dot" id="notif-dot" style="display:none;"></span></button>
-      </div>
-    </header>
-    <div class="notif-panel" id="notif-panel">
-      <div class="notif-panel-header"><h3>🔔 Notifications</h3></div>
-      <div class="notif-list" id="notif-list"></div>
-    </div>
+    <header class="topbar"><div class="page-title">Event Schedule</div></header>
     <main class="page-content">
-      <div class="olympics-banner">
-        <span class="banner-icon">🏅</span>
-        <div>
-          <h3>Brisbane Olympics 2032 — Event Schedule</h3>
-          <p>View all event venues and schedules. Book your coach ride to get there on time!</p>
-        </div>
-      </div>
-
-      <div class="page-header">
-        <div>
-          <h2>Event Schedule</h2>
-          <p>All upcoming Olympic events and venues</p>
-        </div>
-        <a href="/user/book.html" class="btn btn-primary">🎫 Book a Ride</a>
-      </div>
-
-      <div id="events-container" class="vehicle-grid">
-        <div class="loading" style="grid-column:span 3;"><div class="spinner"></div><span>Loading events...</span></div>
-      </div>
+      <div id="events-container" class="vehicle-grid"></div>
     </main>
   </div>
 </div>
-<script src="/js/api.js"></script>
-<script src="/js/app.js"></script>
+
+<!-- Event Details Modal -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal" style="max-width:500px;">
+    <div class="modal-header"><h3 id="d-title">Event Details</h3><button onclick="closeModal('detail-modal')">×</button></div>
+    <div class="modal-body" id="detail-body"></div>
+    <div class="modal-footer"><a href="/user/book.html" class="btn btn-primary">🎫 Book Ride</a></div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script><script src="/js/app.js"></script>
 <script>
 const currentUser = requireAuth('user');
-if (currentUser) { populateSidebar(currentUser); initSidebar(); loadEvents(); loadNotifications(); }
+let allEvents = [];
+if (currentUser) { loadEvents(); }
 
 async function loadEvents() {
-  const container = document.getElementById('events-container');
   const res = await api.getEvents();
-  if (!res.ok) {
-    container.innerHTML = '<div class="alert alert-danger show" style="grid-column:span 3;">Failed to load events</div>';
-    return;
-  }
-  const events = res.data.data || [];
-  if (events.length === 0) {
-    container.innerHTML = `<div class="empty-state" style="grid-column:span 3;">
-      <div class="empty-icon">🏟️</div>
-      <h3>No Events Scheduled</h3>
-      <p>Check back soon for Olympic event updates</p>
-    </div>`;
-    return;
-  }
-  container.innerHTML = events.map(ev => {
-    const d = new Date(ev.event_date);
-    return `
-    <div class="event-card">
-      <div class="event-card-top">
-        <div class="event-date-badge">
-          <div class="day">${d.getDate().toString().padStart(2,'0')}</div>
-          <div class="month">${d.toLocaleDateString('en-AU',{month:'short'})}</div>
-        </div>
-        <div class="event-titles">
-          <h3>${ev.name}</h3>
-          <span>${d.getFullYear()}</span>
-        </div>
-      </div>
-      <div class="event-card-body">
-        <div class="event-detail-row"><span class="icon">🏟️</span><strong>${ev.venue_name}</strong></div>
-        <div class="event-detail-row"><span class="icon">📍</span>${ev.venue_address}</div>
-        <div class="event-detail-row"><span class="icon">🕐</span>
-          <span><strong>Start:</strong> ${formatTime(ev.start_time)}</span>
-        </div>
-        <div class="event-detail-row"><span class="icon">🕔</span>
-          <span><strong>End:</strong> ${formatTime(ev.end_time)}</span>
-        </div>
-        <div style="margin-top:14px;">
-          <a href="/user/book.html" class="btn btn-primary btn-sm btn-full">🎫 Book Ride to this Event</a>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
+  allEvents = res.data.data || [];
+  document.getElementById('events-container').innerHTML = allEvents.map(ev => `
+    <div class="event-card" onclick="viewDetails(${ev.id})" style="cursor:pointer">
+      <div class="event-titles"><h3>${ev.name}</h3><span>${ev.venue_name || 'TBA'}</span></div>
+      <button class="btn btn-outline btn-sm btn-full mt-2">View Details</button>
+    </div>
+  `).join('');
+}
+
+function viewDetails(id) {
+  const ev = allEvents.find(e => e.id === id);
+  document.getElementById('d-title').textContent = ev.name;
+  document.getElementById('detail-body').innerHTML = `
+    <div class="detail-section">
+      <label>📍 Venue</label><h3>${ev.venue_name}</h3>
+      <p>${ev.venue_address || 'Address pending update'}</p>
+    </div>
+    <div class="detail-section mt-3">
+      <label>📅 Time</label>
+      <p>${ev.start_time} - ${ev.end_time}</p>
+    </div>
+  `;
+  openModal('detail-modal');
 }
 </script>
 </body>
