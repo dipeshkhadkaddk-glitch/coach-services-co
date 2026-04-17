@@ -41,35 +41,43 @@
         <button class="hamburger" id="hamburger">☰</button>
         <div>
           <div class="breadcrumb"><a href="/admin/dashboard.html">Dashboard</a><span class="sep">›</span><span>Routes & Pricing</span></div>
-          <div class="page-title">Routes & Pricing Management</div>
+          <div class="page-title">Routes & Pricing</div>
         </div>
       </div>
       <div class="topbar-right">
         <button class="notif-btn" onclick="toggleNotifPanel()">🔔<span class="notif-dot" id="notif-dot" style="display:none;"></span></button>
       </div>
     </header>
+    <div class="notif-panel" id="notif-panel">
+      <div class="notif-panel-header"><h3>🔔 Notifications</h3></div>
+      <div class="notif-list" id="notif-list"></div>
+    </div>
 
     <main class="page-content">
       <div class="page-header">
         <div>
-          <h2>Manage Routes</h2>
-          <p>Configure shuttle routes and print passenger manifests</p>
+          <h2>Routes & Fixed Pricing</h2>
+          <p>Set pickup/drop-off locations and fixed prices for each route</p>
         </div>
-        <button class="btn btn-primary" onclick="openAddModal()">+ Add New Route</button>
+        <button class="btn btn-primary" onclick="openAddModal()">+ Add Route</button>
+      </div>
+
+      <div class="alert alert-info show mb-4">
+        📌 All routes use a <strong>fixed pickup point</strong> — Brisbane Olympics Coach Terminal. Customers must arrive at the designated pickup point.
       </div>
 
       <div class="card">
         <div class="card-header">
-          <h3 class="card-title">Active Routes</h3>
+          <h3 class="card-title">All Routes</h3>
           <span id="route-count" class="text-muted" style="font-size:13px;"></span>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Pickup / Drop-off</th><th>Price</th><th>Vehicle</th><th>Booking Status</th><th>Actions</th></tr>
+            <tr><th>Pickup Location</th><th>Drop-off Location</th><th>Fixed Price</th><th>Vehicle Assigned</th><th>Status</th><th>Bookings</th><th>Actions</th></tr>
             </thead>
             <tbody id="routes-table">
-              <tr><td colspan="5" class="text-center" style="padding:40px;">Loading...</td></tr>
+              <tr><td colspan="6" class="text-center" style="padding:40px;color:var(--text-muted);">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -78,28 +86,49 @@
   </div>
 </div>
 
-<!-- Add/Edit Modal -->
+<!-- Add/Edit Route Modal -->
 <div class="modal-overlay" id="route-modal">
   <div class="modal">
     <div class="modal-header">
-      <h3 class="modal-title" id="route-modal-title">Edit Route</h3>
+      <h3 class="modal-title" id="route-modal-title">Add Route</h3>
       <button class="modal-close" onclick="closeModal('route-modal')">×</button>
     </div>
     <div class="modal-body">
+      <div id="route-alert" class="alert"></div>
       <form id="route-form" onsubmit="saveRoute(event)">
         <input type="hidden" id="route-id"/>
-        <div class="form-group"><label>Pickup Location</label><input type="text" id="r-pickup" class="form-control" required/></div>
-        <div class="form-group"><label>Drop-off Location</label><input type="text" id="r-dropoff" class="form-control" required/></div>
-        <div class="form-row">
-            <div class="form-group"><label>Price (A$)</label><input type="number" id="r-price" class="form-control" step="0.01" required/></div>
-            <div class="form-group"><label>Assign Vehicle</label><select id="r-vehicle" class="form-control"><option value="">— Select Vehicle —</option></select></div>
+        <div class="form-group">
+          <label class="form-label">📍 Pickup Location *</label>
+          <input type="text" id="r-pickup" class="form-control" placeholder="e.g. Brisbane Olympics Coach Terminal" required/>
         </div>
-        <div class="form-group" id="status-group" style="display:none;"><label>Route Status</label><select id="r-status" class="form-control"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+        <div class="form-group">
+          <label class="form-label">🏁 Drop-off Location *</label>
+          <input type="text" id="r-dropoff" class="form-control" placeholder="e.g. Gabba Stadium, Brisbane" required/>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">💰 Fixed Price (AUD) *</label>
+            <input type="number" id="r-price" class="form-control" placeholder="e.g. 25.00" min="0" step="0.01" required/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">🚌 Assign Vehicle</label>
+            <select id="r-vehicle" class="form-control">
+              <option value="">— No Vehicle Assigned —</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" id="r-status-group" style="display:none;">
+          <label class="form-label">Status</label>
+          <select id="r-status" class="form-control">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
       </form>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('route-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="document.getElementById('route-form').requestSubmit()" id="save-btn">Save Route</button>
+      <button class="btn btn-primary" onclick="document.getElementById('route-form').requestSubmit()" id="route-save-btn">💾 Save Route</button>
     </div>
   </div>
 </div>
@@ -108,14 +137,16 @@
 <script src="/js/app.js"></script>
 <script>
 const currentUser = requireAuth('admin');
-if (currentUser) { populateSidebar(currentUser); initSidebar(); loadRoutes(); loadVehicles(); loadNotifications(); }
+let vehicles = [];
+if (currentUser) { populateSidebar(currentUser); initSidebar(); loadRoutes(); loadVehiclesForSelect(); loadNotifications(); }
 
-async function loadVehicles() {
+async function loadVehiclesForSelect() {
   const res = await api.getVehicles();
   if (res.ok) {
+    vehicles = res.data.data || [];
     const sel = document.getElementById('r-vehicle');
-    (res.data.data || []).filter(v => v.status === 'active').forEach(v => {
-      sel.innerHTML += `<option value="${v.id}">${v.name} (${v.plate_number})</option>`;
+    vehicles.filter(v => v.status === 'active').forEach(v => {
+      sel.innerHTML += `<option value="${v.id}">${v.name} (${v.plate_number}) — ${v.seats} seats</option>`;
     });
   }
 }
@@ -123,32 +154,58 @@ async function loadVehicles() {
 async function loadRoutes() {
   const tbody = document.getElementById('routes-table');
   const res = await api.getAllRoutes();
-  if (!res.ok) { tbody.innerHTML = '<tr><td colspan="5">Error loading data</td></tr>'; return; }
+  if (!res.ok) { tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:30px;">Failed to load</td></tr>'; return; }
   const routes = res.data.data || [];
-  document.getElementById('route-count').textContent = routes.length + ' routes';
-  
+  document.getElementById('route-count').textContent = `${routes.length} route${routes.length!==1?'s':''}`;
+  if (routes.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="padding:50px;">
+      <div class="empty-state"><div class="empty-icon">🗺️</div><h3>No Routes Yet</h3><p>Add your first route and set a fixed price</p></div>
+    </td></tr>`;
+    return;
+  }
   tbody.innerHTML = routes.map(r => `
     <tr>
-      <td><div style="font-weight:600;">${r.pickup_location}</div><div style="font-size:12px;color:var(--text-muted);">→ ${r.dropoff_location}</div></td>
-      <td>A$${r.price}</td>
-      <td>${r.vehicle_name || '—'}</td>
-      <td>${r.is_closed ? '<span class="badge" style="background:#ef44441a;color:#ef4444;">🔒 Closed</span>' : '<span class="badge" style="background:#10b9811a;color:#10b981;">🟢 Open</span>'}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="route-dot pickup" style="flex-shrink:0;"></div>
+          <span>${r.pickup_location}</span>
+        </div>
+      </td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="route-dot dropoff" style="flex-shrink:0;"></div>
+          <span>${r.dropoff_location}</span>
+        </div>
+      </td>
+      <td>
+        <span style="font-family:'Outfit',sans-serif;font-size:18px;font-weight:800;color:var(--primary);">A$${parseFloat(r.price).toFixed(2)}</span>
+      </td>
+      <td>
+        ${r.vehicle_name
+          ? `<div style="font-weight:600;">${r.vehicle_name}</div><div style="font-size:12px;color:var(--text-muted);">${r.plate_number} · ${r.seats} seats</div>`
+          : '<span style="color:var(--text-muted);">—</span>'}
+      </td>
+      <td>
+        ${statusBadge(r.status)}
+        ${r.is_closed ? '<span class="badge" style="background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);margin-left:4px;">🔒 Closed</span>' : '<span class="badge" style="background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.3);margin-left:4px;">🟢 Open</span>'}
+      </td>
       <td>
         <div class="action-btns">
-          <button class="btn btn-outline btn-sm" onclick='editRoute(${JSON.stringify(r)})'>✏️</button>
-          <button class="btn btn-sm btn-outline" onclick="toggleClose(${r.id})">${r.is_closed ? '🔓 Open' : '🔒 Close'}</button>
-          <button class="btn btn-sm btn-primary" onclick="printManifest(${r.id}, '${r.pickup_location} to ${r.dropoff_location}')" title="Print All Passengers">🖨️ Manifest</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteRoute(${r.id})">🗑</button>
+          <button class="btn btn-outline btn-sm" onclick="editRoute(${JSON.stringify(r).replace(/"/g,'&quot;')})">✏️</button>
+          <button class="btn btn-sm" style="${r.is_closed ? 'background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.3);' : 'background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.3);'}" onclick="toggleClose(${r.id}, this)">${r.is_closed ? '🔓 Open' : '🔒 Close'}</button>
+          <button class="btn btn-outline btn-sm" onclick="printManifest(${r.id}, '${r.pickup_location.replace(/'/g,'\\&apos;')} → ${r.dropoff_location.replace(/'/g,'\\&apos;')}')" title="Print Passenger List">🖨️</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteRoute(${r.id},this)">🗑</button>
         </div>
       </td>
     </tr>`).join('');
 }
 
 function openAddModal() {
-  document.getElementById('route-modal-title').textContent = 'Add New Route';
+  document.getElementById('route-modal-title').textContent = 'Add Route';
   document.getElementById('route-id').value = '';
   document.getElementById('route-form').reset();
-  document.getElementById('status-group').style.display = 'none';
+  document.getElementById('r-status-group').style.display = 'none';
+  document.getElementById('route-alert').className = 'alert';
   openModal('route-modal');
 }
 
@@ -160,7 +217,8 @@ function editRoute(r) {
   document.getElementById('r-price').value = r.price;
   document.getElementById('r-vehicle').value = r.vehicle_id || '';
   document.getElementById('r-status').value = r.status;
-  document.getElementById('status-group').style.display = 'block';
+  document.getElementById('r-status-group').style.display = 'block';
+  document.getElementById('route-alert').className = 'alert';
   openModal('route-modal');
 }
 
@@ -168,70 +226,103 @@ async function saveRoute(e) {
   e.preventDefault();
   const id = document.getElementById('route-id').value;
   const data = {
-    pickup_location: document.getElementById('r-pickup').value,
-    dropoff_location: document.getElementById('r-dropoff').value,
-    price: document.getElementById('r-price').value,
+    pickup_location: document.getElementById('r-pickup').value.trim(),
+    dropoff_location: document.getElementById('r-dropoff').value.trim(),
+    price: parseFloat(document.getElementById('r-price').value),
     vehicle_id: document.getElementById('r-vehicle').value || null,
-    status: document.getElementById('r-status').value || 'active'
+    status: document.getElementById('r-status').value || 'active',
   };
+  const alertEl = document.getElementById('route-alert');
+  const btn = document.getElementById('route-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
   const res = id ? await api.updateRoute(id, data) : await api.createRoute(data);
-  if (res.ok) { toast.success('Saved!'); closeModal('route-modal'); loadRoutes(); }
-  else { toast.error(res.data.message); }
+  btn.disabled = false; btn.innerHTML = '💾 Save Route';
+  if (!res.ok) {
+    alertEl.className = 'alert alert-danger show';
+    alertEl.innerHTML = '❌ ' + (res.data.message || 'Failed to save');
+    return;
+  }
+  toast.success(id ? 'Route updated!' : 'Route added!');
+  closeModal('route-modal');
+  loadRoutes();
 }
 
-async function toggleClose(id) {
+async function deleteRoute(id, btn) {
+  if (!confirm('Delete this route?')) return;
+  btn.disabled = true;
+  const res = await api.deleteRoute(id);
+  if (res.ok) { toast.success('Route deleted'); loadRoutes(); }
+  else { toast.error(res.data.message); btn.disabled = false; }
+}
+
+async function toggleClose(id, btn) {
+  btn.disabled = true;
   const res = await api.toggleRouteClose(id);
-  if (res.ok) { toast.success('Status updated'); loadRoutes(); }
-}
-
-async function deleteRoute(id) {
-  if (confirm('Delete this route?')) {
-    const res = await api.deleteRoute(id);
-    if (res.ok) { toast.success('Deleted'); loadRoutes(); }
+  if (res.ok) {
+    toast.success(res.data.is_closed ? '🔒 Route closed for bookings' : '🟢 Route opened for bookings');
+    loadRoutes();
+  } else {
+    toast.error(res.data.message);
+    btn.disabled = false;
   }
 }
 
 async function printManifest(routeId, routeName) {
   const res = await api.getPassengerManifest(routeId);
-  if (!res.ok) return toast.error('Empty Manifest');
+  if (!res.ok) { toast.error('Failed to load passenger list'); return; }
   const passengers = res.data.data || [];
-  
-  const content = `
+
+  const tableRows = passengers.length > 0
+    ? passengers.map((p, i) => `
+      <tr>
+        <td>${i+1}</td>
+        <td>${p.passenger_name || '—'}</td>
+        <td>${p.phone || '—'}</td>
+        <td>${p.main_booker || '—'}</td>
+        <td>${p.type || '—'}</td>
+        <td>#${p.booking_id}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" style="text-align:center;padding:20px;">No confirmed passengers found for this route.</td></tr>';
+
+  const printWindow = window.open('', '_blank', 'width=900,height=700');
+  printWindow.document.write(`
+    <!DOCTYPE html>
     <html>
     <head>
-      <title>Manifest: ${routeName}</title>
+      <title>Passenger Manifest — ${routeName}</title>
       <style>
-        body { font-family: sans-serif; padding: 40px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th { background: #1e3a5f; color: white; padding: 12px; text-align: left; }
-        td { padding: 10px; border-bottom: 1px solid #ddd; font-size: 14px; }
-        .header { border-bottom: 2px solid #1e3a5f; padding-bottom: 10px; margin-bottom: 20px; }
+        body { font-family: Arial, sans-serif; padding: 30px; color: #111; }
+        h1 { font-size: 22px; margin-bottom: 4px; }
+        .meta { font-size: 13px; color: #555; margin-bottom: 24px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #1e3a5f; color: white; padding: 10px 12px; text-align: left; font-size: 13px; }
+        td { padding: 9px 12px; border-bottom: 1px solid #ddd; font-size: 13px; }
+        tr:nth-child(even) td { background: #f5f5f5; }
+        .footer { margin-top: 24px; font-size: 12px; color: #888; }
+        @media print { button { display:none; } }
       </style>
     </head>
-    <body onload="window.print()">
-      <div class="header">
-        <h1>Coach Services Co. — Passenger Manifest</h1>
-        <p><strong>Route:</strong> ${routeName}</p>
-        <p><strong>Total Passengers:</strong> ${passengers.length}</p>
+    <body>
+      <h1>🚌 Coach Services Co. — Passenger Manifest</h1>
+      <div class="meta">
+        <strong>Route:</strong> ${routeName}<br/>
+        <strong>Printed:</strong> ${new Date().toLocaleString('en-AU')}<br/>
+        <strong>Total Passengers:</strong> ${passengers.length}
       </div>
       <table>
-        <thead><tr><th>#</th><th>Passenger Name</th><th>Phone</th><th>Main Booker</th><th>Type</th></tr></thead>
-        <tbody>
-          ${passengers.map((p, i) => `
-            <tr>
-              <td>${i+1}</td>
-              <td><strong>${p.passenger_name}</strong></td>
-              <td>${p.phone || '—'}</td>
-              <td>${p.main_booker}</td>
-              <td>${p.type}</td>
-            </tr>
-          `).join('')}
-        </tbody>
+        <thead>
+          <tr><th>#</th><th>Passenger Name</th><th>Phone</th><th>Booked By</th><th>Type</th><th>Booking ID</th></tr>
+        </thead>
+        <tbody>${tableRows}</tbody>
       </table>
+      <div class="footer">Brisbane Olympics 2032 — Coach Services Co. Official Transport Manifest</div>
+      <br/>
+      <button onclick="window.print()" style="padding:10px 24px;background:#1e3a5f;color:white;border:none;border-radius:6px;font-size:14px;cursor:pointer;margin-top:8px;">🖨️ Print</button>
     </body>
-    </html>`;
-  const win = window.open('', '_blank');
-  win.document.write(content);
+    </html>
+  `);
+  printWindow.document.close();
+  setTimeout(() => printWindow.print(), 500);
 }
 </script>
 </body>
