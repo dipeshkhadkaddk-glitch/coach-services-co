@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
-const { emailProfileApproved, emailProfileRejected } = require('../utils/email');
+const { sendSMS } = require('../utils/sms');
 
 // GET /api/users — admin: get all users
 router.get('/', authMiddleware, adminMiddleware, async (req, res) => {
@@ -68,7 +68,7 @@ router.get('/pending', authMiddleware, adminMiddleware, async (req, res) => {
 
 // PUT /api/users/:id/status — admin: approve/reject/deactivate
 router.put('/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
-  const { status } = req.body;
+  const { status, reason } = req.body;
   if (!['approved', 'rejected', 'pending'].includes(status)) {
     return res.status(400).json({ success: false, message: 'Invalid status' });
   }
@@ -77,16 +77,17 @@ router.put('/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
     if (rows.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
     const user = rows[0];
     await pool.query('UPDATE users SET status=? WHERE id=?', [status, req.params.id]);
-    // Notify user
+    // Notify user internally
     const msg = status === 'approved'
       ? 'Your profile has been approved! You can now log in and book rides.'
-      : `Your profile request has been ${status}.`;
+      : `Your profile request has been ${status}.${reason ? ' Reason: '+reason : ''}`;
     await pool.query('INSERT INTO notifications (user_id, message, type) VALUES (?,?,?)', [user.id, msg, 'profile']);
-    // Email notification
+    
+    // SMS notification
     if (status === 'approved') {
-      await emailProfileApproved(user.full_name, user.email);
+      await sendSMS(user.phone, `Coach Services Co: Your profile has been APPROVED. You may now log in to the portal and book rides.`);
     } else if (status === 'rejected') {
-      await emailProfileRejected(user.full_name, user.email);
+      await sendSMS(user.phone, `Coach Services Co: Your profile application was REJECTED.${reason ? '\\nReason: '+reason : ''}`);
     }
     res.json({ success: true, message: `User status updated to ${status}` });
   } catch (err) {

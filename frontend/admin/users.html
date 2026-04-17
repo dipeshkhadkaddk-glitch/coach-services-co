@@ -12,7 +12,7 @@
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
       <div class="brand-icon">🚌</div>
-      <div class="brand-text"><h2>Coach Services</h2><span>Admin Portal</span></div>
+      <div class="brand-text"><h2>Coach Services</h2><span>Admin Portal <span style="font-size:10px; opacity:0.5;">v2.1</span></span></div>
     </div>
     <div class="sidebar-section">
       <div class="sidebar-section-label">Overview</div>
@@ -212,9 +212,17 @@ function viewUser(u) {
 }
 
 async function changeStatus(id, status, btn) {
-  if (status === 'rejected' && !confirm(`Are you sure you want to ${status === 'rejected' ? 'reject/deactivate' : ''} this user?`)) return;
+  let reason = '';
+  if (status === 'rejected') {
+    reason = prompt('Please enter the reason for rejection (required):');
+    if (reason === null) return; // Admin cancelled prompt
+    if (!reason.trim()) {
+      toast.error('A rejection reason is required.');
+      return;
+    }
+  }
   btn.disabled = true;
-  const res = await api.updateUserStatus(id, status);
+  const res = await api.updateUserStatus(id, status, reason);
   if (res.ok) { toast.success(`User ${status}`); loadUsers(); loadPending(); }
   else { toast.error(res.data.message); btn.disabled = false; }
 }

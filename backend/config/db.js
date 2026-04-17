@@ -44,7 +44,10 @@ const initializeDatabase = async () => {
     database: DB_NAME,
     waitForConnections: true,
     connectionLimit: 10,
-    queueLimit: 0
+    queueLimit: 0,
+    connectTimeout: 10000, // 10s timeout
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0
   });
 
   const conn = await _pool.getConnection();

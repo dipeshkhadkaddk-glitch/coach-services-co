@@ -12,10 +12,11 @@ exports.sendSMS = async (to, body) => {
   }
 
   // --- AUTO-FORMATTING LOGIC ---
-  let formattedTo = to.replace(/[\s\-\(\)]/g, ''); // Remove spaces, dashes, brackets
+  // Ensure the number is in E.164 format for Twilio
+  let formattedTo = String(to).replace(/[\s\-\(\)]/g, ''); // Remove spaces, dashes, brackets
   
   if (formattedTo.startsWith('0')) {
-    // If it starts with 0 (like 0493...), replace it with +61
+    // If it starts with 0 (like 0493...), replace it with +61 (Australia)
     formattedTo = '+61' + formattedTo.substring(1);
   } else if (!formattedTo.startsWith('+')) {
     // If it doesn't have a +, assume it needs +61

@@ -223,9 +223,7 @@ async function searchRoutes() {
         <div class="route-line"></div>
         <div class="route-point"><div class="route-dot dropoff"></div><span style="font-size:12px;">🏁 ${r.dropoff_location}</span></div>
       </div>
-      <div class="vehicle-detail">
-        <span style="font-size:13px;">🪑 Available: <strong style="color:${r.remaining_seats > 10 ? 'var(--success)' : (r.remaining_seats > 0 ? 'var(--accent)' : 'var(--danger)')}">${r.remaining_seats}</strong> / ${r.seats}</span>
-      </div>
+      <div class="vehicle-detail">🪑 Seats: <strong>${r.seats || 'N/A'}</strong></div>
       <div class="vehicle-price">
         <div><div class="price-label">Fixed Price</div><div class="price-value">A$${parseFloat(r.price||0).toFixed(2)}</div></div>
         <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();selectRoute(${JSON.stringify(r).replace(/"/g,'&quot;')})">Select →</button>
@@ -239,17 +237,10 @@ function selectRoute(route) {
   document.getElementById('step1-card').style.display = 'none';
   document.getElementById('step2-card').style.display = 'block';
   document.getElementById('selected-route-summary').innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <div>
-        <strong>Selected Route:</strong> 📍 ${route.pickup_location} → 🏁 ${route.dropoff_location}<br/>
-        <strong>Vehicle:</strong> ${route.vehicle_name || 'Coach'} &nbsp;|&nbsp; 
-        <strong>Available Seats:</strong> <strong style="color:${route.remaining_seats > 5 ? 'var(--success)' : 'var(--danger)'}">${route.remaining_seats}</strong>
-      </div>
-      <div style="font-size:20px; font-weight:800; color:var(--primary);">A$${parseFloat(route.price||0).toFixed(2)}</div>
-    </div>
+    <strong>Selected Route:</strong> 📍 ${route.pickup_location} → 🏁 ${route.dropoff_location}<br/>
+    <strong>Vehicle:</strong> ${route.vehicle_name || 'Coach'} &nbsp;|&nbsp; <strong>Seats:</strong> ${route.seats || '—'} &nbsp;|&nbsp; <strong>Price:</strong> <span style="color:var(--primary);font-weight:700;">A$${parseFloat(route.price||0).toFixed(2)}</span>
   `;
-  document.getElementById('max-seats').textContent = route.remaining_seats || '0';
-  document.getElementById('grp-count').max = route.remaining_seats || 1;
+  document.getElementById('max-seats').textContent = route.seats || '—';
 }
 
 function changeRoute() {

@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Admin Dashboard — Coach Services Co.</title>
   <link rel="stylesheet" href="/css/style.css"/>
 </head>
@@ -11,72 +12,200 @@
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
       <div class="brand-icon">🚌</div>
-      <div class="brand-text"><h2>Coach Services</h2><span>Admin Portal</span></div>
+      <div class="brand-text"><h2>Coach Services</h2><span>Admin Portal <span style="font-size:10px; opacity:0.5;">v2.1</span></span></div>
     </div>
     <div class="sidebar-section">
       <div class="sidebar-section-label">Overview</div>
       <a href="/admin/dashboard.html" class="nav-item active"><span class="nav-icon">📊</span> Dashboard</a>
-      <a href="/admin/bookings.html" class="nav-item"><span class="nav-icon">🎫</span> Bookings</a>
+      <a href="/admin/bookings.html" class="nav-item"><span class="nav-icon">🎫</span> Bookings <span class="nav-badge" id="pending-bookings-badge" style="display:none;">0</span></a>
     </div>
     <div class="sidebar-section" style="margin-top:12px;">
       <div class="sidebar-section-label">Management</div>
-      <a href="/admin/users.html" class="nav-item"><span class="nav-icon">👥</span> Users</a>
+      <a href="/admin/users.html" class="nav-item"><span class="nav-icon">👥</span> Users <span class="nav-badge" id="pending-users-badge" style="display:none;">0</span></a>
       <a href="/admin/vehicles.html" class="nav-item"><span class="nav-icon">🚌</span> Vehicles</a>
-      <a href="/admin/routes.html" class="nav-item"><span class="nav-icon">🗺️</span> Routes</a>
+      <a href="/admin/routes.html" class="nav-item"><span class="nav-icon">🗺️</span> Routes & Pricing</a>
       <a href="/admin/events.html" class="nav-item"><span class="nav-icon">🏅</span> Events</a>
     </div>
     <div class="sidebar-footer">
-      <button class="btn-logout" onclick="logout()">⏻ Logout</button>
+      <div class="user-card">
+        <div class="user-avatar" id="sidebar-user-avatar">A</div>
+        <div class="user-info"><div class="name" id="sidebar-user-name">Admin</div><div class="role" id="sidebar-user-role">admin</div></div>
+        <button class="btn-logout" onclick="logout()" title="Logout">⏻</button>
+      </div>
     </div>
   </aside>
 
   <div class="main-content">
     <header class="topbar">
-      <div class="page-title">Admin Dashboard</div>
+      <div class="topbar-left">
+        <button class="hamburger" id="hamburger">☰</button>
+        <div>
+          <div class="breadcrumb"><span>Admin</span></div>
+          <div class="page-title">Dashboard</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <button class="notif-btn" onclick="toggleNotifPanel()">🔔<span class="notif-dot" id="notif-dot" style="display:none;"></span></button>
+      </div>
     </header>
+    <div class="notif-panel" id="notif-panel">
+      <div class="notif-panel-header">
+        <h3>🔔 Notifications</h3>
+        <button class="btn btn-sm btn-outline" onclick="api.markAllRead().then(()=>loadNotifications())">Mark all read</button>
+      </div>
+      <div class="notif-list" id="notif-list"></div>
+    </div>
 
     <main class="page-content">
       <div class="olympics-banner">
         <span class="banner-icon">🏟️</span>
-        <div><h3>Brisbane Olympics 2032</h3><p>Transport Operations Command Centre</p></div>
+        <div>
+          <h3>Brisbane Olympics 2032 — Admin Command Centre</h3>
+          <p>Monitor and manage all coach service operations from here.</p>
+        </div>
       </div>
 
-      <!-- Quick Actions -->
-      <div class="card mt-4">
-        <div class="card-header"><h3 class="card-title">Quick Actions</h3></div>
-        <div class="card-body">
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">
-            <a href="/admin/events.html?action=add" class="btn btn-primary" style="flex-direction:column;padding:20px;gap:8px;">
-               <span style="font-size:28px;">➕</span><span>Add Event</span>
-            </a>
-            <a href="/admin/users.html" class="btn btn-secondary" style="flex-direction:column;padding:20px;gap:8px;"><span style="font-size:28px;">👥</span><span>Users</span></a>
-            <a href="/admin/vehicles.html" class="btn btn-secondary" style="flex-direction:column;padding:20px;gap:8px;"><span style="font-size:28px;">🚌</span><span>Vehicles</span></a>
-            <a href="/admin/bookings.html" class="btn btn-secondary" style="flex-direction:column;padding:20px;gap:8px;"><span style="font-size:28px;">🎫</span><span>Bookings</span></a>
+      <div class="page-header">
+        <div><h2>System Overview</h2><p>Real-time transport operations summary</p></div>
+        <div class="flex gap-2">
+          <a href="/admin/users.html" class="btn btn-outline btn-sm">👥 Manage Users</a>
+          <a href="/admin/bookings.html" class="btn btn-primary btn-sm">🎫 View Bookings</a>
+        </div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card yellow"><span class="stat-icon">👥</span><div class="stat-value" id="s-users">—</div><div class="stat-label">Active Users</div></div>
+        <div class="stat-card red"><span class="stat-icon">⏳</span><div class="stat-value" id="s-pending-users">—</div><div class="stat-label">Pending Approvals</div></div>
+        <div class="stat-card green"><span class="stat-icon">🚌</span><div class="stat-value" id="s-vehicles">—</div><div class="stat-label">Active Vehicles</div></div>
+        <div class="stat-card blue"><span class="stat-icon">🗺️</span><div class="stat-value" id="s-routes">—</div><div class="stat-label">Active Routes</div></div>
+        <div class="stat-card purple"><span class="stat-icon">🎫</span><div class="stat-value" id="s-bookings">—</div><div class="stat-label">Total Bookings</div></div>
+        <div class="stat-card teal"><span class="stat-icon">🏅</span><div class="stat-value" id="s-events">—</div><div class="stat-label">Events</div></div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Recent Bookings -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Recent Bookings</h3>
+            <a href="/admin/bookings.html" class="btn btn-sm btn-outline">View All →</a>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>ID</th><th>Passenger</th><th>Route</th><th>Type</th><th>Status</th></tr></thead>
+              <tbody id="recent-bookings"><tr><td colspan="5" class="text-center" style="padding:30px;color:var(--text-muted);">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Pending Profile Requests -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">⏳ Pending Approvals</h3>
+            <a href="/admin/users.html" class="btn btn-sm btn-outline">Manage →</a>
+          </div>
+          <div id="pending-list" style="padding:0 16px 16px;">
+            <div class="loading"><div class="spinner"></div></div>
           </div>
         </div>
       </div>
 
-      <div class="page-header mt-4"><h2>System Stats</h2></div>
-      <div class="stats-grid" id="stats-grid">
-         <div class="stat-card blue"><div class="stat-value" id="s-bookings">—</div><div class="stat-label">Total Bookings</div></div>
-         <div class="stat-card teal"><div class="stat-value" id="s-events">—</div><div class="stat-label">Olympic Events</div></div>
+      <!-- Quick Nav -->
+      <div class="card mt-4">
+        <div class="card-header"><h3 class="card-title">Quick Actions</h3></div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">
+            <a href="/admin/users.html" class="btn btn-secondary" style="flex-direction:column;padding:20px;gap:8px;"><span style="font-size:28px;">👥</span><span>Users</span></a>
+            <a href="/admin/vehicles.html" class="btn btn-secondary" style="flex-direction:column;padding:20px;gap:8px;"><span style="font-size:28px;">🚌</span><span>Vehicles</span></a>
+            <a href="/admin/routes.html" class="btn btn-secondary" style="flex-direction:column;padding:20px;gap:8px;"><span style="font-size:28px;">🗺️</span><span>Routes</span></a>
+            <a href="/admin/events.html" class="btn btn-secondary" style="flex-direction:column;padding:20px;gap:8px;"><span style="font-size:28px;">🏅</span><span>Events</span></a>
+            <a href="/admin/bookings.html" class="btn btn-secondary" style="flex-direction:column;padding:20px;gap:8px;"><span style="font-size:28px;">🎫</span><span>Bookings</span></a>
+          </div>
+        </div>
       </div>
     </main>
   </div>
 </div>
 
-<script src="/js/api.js"></script><script src="/js/app.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/app.js"></script>
 <script>
 const currentUser = requireAuth('admin');
-if (currentUser) { populateSidebar(currentUser); initSidebar(); loadStats(); loadNotifications(); }
+if (currentUser) {
+  populateSidebar(currentUser);
+  initSidebar();
+  loadStats();
+  loadNotifications();
+}
 
 async function loadStats() {
   const res = await api.getDashboardStats();
-  if (res.ok) {
-    const d = res.data.data;
-    document.getElementById('s-bookings').textContent = d.total_bookings;
-    document.getElementById('s-events').textContent = d.total_events;
+  if (!res.ok) { toast.error('Failed to load stats'); return; }
+  const d = res.data.data;
+  document.getElementById('s-users').textContent = d.total_users;
+  document.getElementById('s-pending-users').textContent = d.pending_users;
+  document.getElementById('s-vehicles').textContent = d.total_vehicles;
+  document.getElementById('s-routes').textContent = d.total_routes;
+  document.getElementById('s-bookings').textContent = d.total_bookings;
+  document.getElementById('s-events').textContent = d.total_events;
+
+  // Badges
+  const pb = document.getElementById('pending-bookings-badge');
+  if (d.pending_bookings > 0) { pb.textContent = d.pending_bookings; pb.style.display = 'inline-block'; }
+  const pu = document.getElementById('pending-users-badge');
+  if (d.pending_users > 0) { pu.textContent = d.pending_users; pu.style.display = 'inline-block'; }
+
+  // Recent bookings
+  const tbody = document.getElementById('recent-bookings');
+  if (!d.recent_bookings || d.recent_bookings.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:30px;">No bookings yet</td></tr>';
+  } else {
+    tbody.innerHTML = d.recent_bookings.map(b => `
+      <tr>
+        <td style="color:var(--primary);font-weight:700;">#${b.id}</td>
+        <td>${b.full_name || 'N/A'}</td>
+        <td style="font-size:12px;">${b.pickup_location||'?'} → ${b.dropoff_location||'?'}</td>
+        <td>${statusBadge(b.booking_type)}</td>
+        <td>${statusBadge(b.status)}</td>
+      </tr>`).join('');
   }
+
+  // Pending approvals
+  const pendingRes = await api.getPendingUsers();
+  const pendingEl = document.getElementById('pending-list');
+  if (pendingRes.ok) {
+    const users = pendingRes.data.data || [];
+    if (users.length === 0) {
+      pendingEl.innerHTML = '<div class="empty-state" style="padding:30px 0;"><div class="empty-icon" style="font-size:36px;">✅</div><p>No pending approvals</p></div>';
+    } else {
+      pendingEl.innerHTML = users.slice(0,5).map(u => `
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+          <div style="width:36px;height:36px;background:var(--secondary);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--primary);flex-shrink:0;">${u.full_name[0]}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:14px;font-weight:600;">${u.full_name}</div>
+            <div style="font-size:12px;color:var(--text-muted);">${u.email}</div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-success btn-sm" onclick="approveUser(${u.id}, this)">✓</button>
+            <button class="btn btn-danger btn-sm" onclick="rejectUser(${u.id}, this)">✕</button>
+          </div>
+        </div>`).join('');
+    }
+  }
+}
+
+async function approveUser(id, btn) {
+  btn.disabled = true;
+  const res = await api.updateUserStatus(id, 'approved');
+  if (res.ok) { toast.success('User approved!'); loadStats(); }
+  else { toast.error(res.data.message); btn.disabled = false; }
+}
+async function rejectUser(id, btn) {
+  if (!confirm('Reject this user?')) return;
+  btn.disabled = true;
+  const res = await api.updateUserStatus(id, 'rejected');
+  if (res.ok) { toast.success('User rejected'); loadStats(); }
+  else { toast.error(res.data.message); btn.disabled = false; }
 }
 </script>
 </body>

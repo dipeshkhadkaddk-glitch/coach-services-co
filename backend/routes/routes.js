@@ -54,12 +54,20 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
   }
   try {
     // Duplicate route prevention
+    const p = pickup_location.trim();
+    const d = dropoff_location.trim();
+    console.log(`[DEBUG] POST /api/routes — checking for: "${p}" -> "${d}"`);
+
     const [existing] = await pool.query(
       'SELECT id FROM routes WHERE pickup_location=? AND dropoff_location=? AND status=\'active\'',
-      [pickup_location.trim(), dropoff_location.trim()]
+      [p, d]
     );
+
+    console.log(`[DEBUG] Found ${existing.length} existing active route(s).`);
+
     if (existing.length > 0) {
-      return res.status(409).json({ success: false, message: `A route from "${pickup_location}" to "${dropoff_location}" already exists.` });
+      console.log(`[DEBUG] Duplicate blocked: ID ${existing[0].id}`);
+      return res.status(409).json({ success: false, message: `A route from "${p}" to "${d}" already exists.` });
     }
     const parsedPrice = parseFloat(price);
     if (isNaN(parsedPrice) || parsedPrice < 0) {
