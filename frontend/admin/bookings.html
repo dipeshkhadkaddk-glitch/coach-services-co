@@ -170,12 +170,12 @@ function renderBookings(bookings) {
       <td style="font-size:12px;color:var(--text-muted);">${formatDate(b.created_at)}</td>
       <td>
         <div class="action-btns">
-          <button class="btn btn-outline btn-sm" title="View Details" onclick="viewBooking(${JSON.stringify(b).replace(/"/g,'&quot;')})">👁</button>
-          <button class="btn btn-outline btn-sm" title="Print Manifest" onclick="printManifest(${b.id})">🖨️</button>
+          <button class="btn btn-outline btn-sm" onclick="viewBooking(${JSON.stringify(b).replace(/"/g,'&quot;')})">👁</button>
+          ${b.status==='confirmed' ? `<a class="btn btn-outline btn-sm" href="/admin/manifest.html?id=${b.id}" target="_blank" title="View Passenger Manifest">📋</a>` : ''}
           ${b.status==='pending' ? `
-            <button class="btn btn-success btn-sm" title="Confirm" onclick="updateStatus(${b.id},'confirmed',this)">✓</button>
-            <button class="btn btn-danger btn-sm" title="Cancel" onclick="updateStatus(${b.id},'cancelled',this)">✕</button>` : ''}
-          ${b.status==='confirmed' ? `<button class="btn btn-danger btn-sm" title="Cancel" onclick="updateStatus(${b.id},'cancelled',this)">Cancel</button>` : ''}
+            <button class="btn btn-success btn-sm" onclick="updateStatus(${b.id},'confirmed',this)">✓</button>
+            <button class="btn btn-danger btn-sm" onclick="updateStatus(${b.id},'cancelled',this)">✕</button>` : ''}
+          ${b.status==='confirmed' ? `<button class="btn btn-danger btn-sm" onclick="updateStatus(${b.id},'cancelled',this)">Cancel</button>` : ''}
         </div>
       </td>
     </tr>`).join('');
@@ -214,7 +214,7 @@ function viewBooking(b) {
   `;
   document.getElementById('booking-modal-footer').innerHTML = `
     <button class="btn btn-outline" onclick="closeModal('booking-modal')">Close</button>
-    <button class="btn btn-primary" onclick="printManifest(${b.id})">🖨️ Print Manifest</button>
+    ${b.status==='confirmed' ? `<a class="btn btn-outline" href="/admin/manifest.html?id=${b.id}" target="_blank">📋 View Manifest</a>` : ''}
     ${b.status==='pending' ? `
       <button class="btn btn-success" onclick="updateStatus(${b.id},'confirmed',this);closeModal('booking-modal')">✓ Confirm Booking</button>
       <button class="btn btn-danger" onclick="updateStatus(${b.id},'cancelled',this);closeModal('booking-modal')">✕ Cancel</button>` : ''}
@@ -228,10 +228,6 @@ async function updateStatus(id, status, btn) {
   const res = await api.updateBookingStatus(id, status);
   if (res.ok) { toast.success(`Booking ${status}!`); loadBookings(); }
   else { toast.error(res.data.message); btn.disabled = false; }
-}
-
-function printManifest(id) {
-  window.open(`/admin/manifest.html?id=${id}`, '_blank');
 }
 </script>
 </body>

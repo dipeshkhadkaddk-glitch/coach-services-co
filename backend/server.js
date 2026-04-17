@@ -37,13 +37,26 @@ app.use('/api/notifications', notificationRoutes);
 app.get('/api/dashboard/stats', async (req, res) => {
   const { pool } = require('./config/db');
   try {
-    const [[{ total_users }]] = await pool.query("SELECT COUNT(*) AS total_users FROM users WHERE role='user' AND status='approved'");
-    const [[{ pending_users }]] = await pool.query("SELECT COUNT(*) AS pending_users FROM users WHERE role='user' AND status='pending'");
-    const [[{ total_vehicles }]] = await pool.query("SELECT COUNT(*) AS total_vehicles FROM vehicles WHERE status='active'");
-    const [[{ total_routes }]] = await pool.query("SELECT COUNT(*) AS total_routes FROM routes WHERE status='active'");
-    const [[{ total_bookings }]] = await pool.query("SELECT COUNT(*) AS total_bookings FROM bookings");
-    const [[{ pending_bookings }]] = await pool.query("SELECT COUNT(*) AS pending_bookings FROM bookings WHERE status='pending'");
-    const [[{ total_events }]] = await pool.query('SELECT COUNT(*) AS total_events FROM events');
+    const [usersRes] = await pool.query("SELECT COUNT(*) AS total_users FROM users WHERE role='user' AND status='approved'");
+    const total_users = usersRes[0].total_users;
+
+    const [pendingRes] = await pool.query("SELECT COUNT(*) AS pending_users FROM users WHERE role='user' AND status='pending'");
+    const pending_users = pendingRes[0].pending_users;
+
+    const [vehiclesRes] = await pool.query("SELECT COUNT(*) AS total_vehicles FROM vehicles WHERE status='active'");
+    const total_vehicles = vehiclesRes[0].total_vehicles;
+
+    const [routesRes] = await pool.query("SELECT COUNT(*) AS total_routes FROM routes WHERE status='active'");
+    const total_routes = routesRes[0].total_routes;
+
+    const [bookingsRes] = await pool.query("SELECT COUNT(*) AS total_bookings FROM bookings");
+    const total_bookings = bookingsRes[0].total_bookings;
+
+    const [pbRes] = await pool.query("SELECT COUNT(*) AS pending_bookings FROM bookings WHERE status='pending'");
+    const pending_bookings = pbRes[0].pending_bookings;
+
+    const [eventsRes] = await pool.query('SELECT COUNT(*) AS total_events FROM events');
+    const total_events = eventsRes[0].total_events;
     const [recent_bookings] = await pool.query(`
       SELECT b.id, b.booking_type, b.status, b.created_at, u.full_name, r.pickup_location, r.dropoff_location
       FROM bookings b LEFT JOIN users u ON b.user_id=u.id LEFT JOIN routes r ON b.route_id=r.id
@@ -58,13 +71,19 @@ app.get('/api/dashboard/stats', async (req, res) => {
   }
 });
 
-// SPA fallback: serve index.html for non-API routes
+// SPA fallback: serve index.html for non-API, non-static routes
+// express.static above already handles real .html files (manifest.html, etc.)
+// This fallback only applies to routes that didn't match any static file
 app.get('*', (req, res) => {
-  if (!req.path.startsWith('/api')) {
-    res.sendFile(path.join(__dirname, '../frontend/index.html'));
-  } else {
-    res.status(404).json({ success: false, message: 'API endpoint not found' });
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ success: false, message: 'API endpoint not found' });
   }
+  // If the path looks like a direct file request (has an extension), let express handle 404
+  if (req.path.match(/\.[a-zA-Z0-9]+$/)) {
+    return res.status(404).json({ success: false, message: 'File not found' });
+  }
+  // For clean URL routes (no extension), serve index.html as SPA fallback
+  res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
 // Start server
