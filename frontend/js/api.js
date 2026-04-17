@@ -71,6 +71,7 @@ const api = {
   getBookings: (type = '') => api.get(`/bookings${type ? `?type=${type}` : ''}`),
   createBooking: (data) => api.post('/bookings', data),
   updateBookingStatus: (id, status) => api.put(`/bookings/${id}/status`, { status }),
+  deleteBooking: (id) => api.delete(`/bookings/${id}`),
 
   // Notifications
   getNotifications: () => api.get('/notifications'),

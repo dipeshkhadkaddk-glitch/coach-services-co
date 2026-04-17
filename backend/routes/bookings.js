@@ -222,4 +222,15 @@ router.put('/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
   }
 });
 
+// DELETE /api/bookings/:id — admin: permanently delete booking
+router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const [result] = await pool.query('DELETE FROM bookings WHERE id=?', [req.params.id]);
+    if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'Booking not found' });
+    res.json({ success: true, message: 'Booking deleted permanently' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;

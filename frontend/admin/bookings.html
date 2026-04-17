@@ -176,6 +176,7 @@ function renderBookings(bookings) {
             <button class="btn btn-success btn-sm" onclick="updateStatus(${b.id},'confirmed',this)">✓</button>
             <button class="btn btn-danger btn-sm" onclick="updateStatus(${b.id},'cancelled',this)">✕</button>` : ''}
           ${b.status==='confirmed' ? `<button class="btn btn-danger btn-sm" onclick="updateStatus(${b.id},'cancelled',this)">Cancel</button>` : ''}
+          <button class="btn btn-danger btn-sm" onclick="deleteBooking(${b.id},this)" title="Delete Permanently">🗑</button>
         </div>
       </td>
     </tr>`).join('');
@@ -228,6 +229,19 @@ async function updateStatus(id, status, btn) {
   const res = await api.updateBookingStatus(id, status);
   if (res.ok) { toast.success(`Booking ${status}!`); loadBookings(); }
   else { toast.error(res.data.message); btn.disabled = false; }
+}
+
+async function deleteBooking(id, btn) {
+  if (!confirm(`Are you sure you want to PERMANENTLY delete booking #${id}? This action cannot be undone.`)) return;
+  btn.disabled = true;
+  const res = await api.deleteBooking(id);
+  if (res.ok) {
+    toast.success('Booking deleted!');
+    loadBookings();
+  } else {
+    toast.error(res.data.message);
+    btn.disabled = false;
+  }
 }
 </script>
 </body>
