@@ -8,7 +8,9 @@ router.get('/', authMiddleware, async (req, res) => {
   const { pickup, dropoff } = req.query;
   try {
     let query = `
-      SELECT r.*, v.name AS vehicle_name, v.seats, v.driver_name, v.plate_number, v.status AS vehicle_status
+      SELECT r.*, v.name AS vehicle_name, v.seats, v.driver_name, v.plate_number, v.status AS vehicle_status,
+             (SELECT COUNT(*) FROM bookings b WHERE b.route_id = r.id AND b.status = 'confirmed') AS confirmed_bookings,
+             (SELECT SUM(passenger_count) FROM bookings b WHERE b.route_id = r.id AND b.status = 'confirmed') AS confirmed_passengers
       FROM routes r
       LEFT JOIN vehicles v ON r.vehicle_id = v.id
       WHERE r.status='active'
@@ -18,11 +20,10 @@ router.get('/', authMiddleware, async (req, res) => {
     if (dropoff) { query += ' AND r.dropoff_location LIKE ?'; params.push(`%${dropoff}%`); }
     query += ' ORDER BY r.created_at DESC';
     
-    // Add a timeout to the query to prevent hangs
     const [rows] = await pool.query({
       sql: query,
       values: params,
-      timeout: 5000 // 5 seconds
+      timeout: 5000 
     });
     
     res.json({ success: true, data: rows });
@@ -127,43 +128,34 @@ router.put('/:id/toggle-close', authMiddleware, adminMiddleware, async (req, res
 // GET /api/routes/:id/passengers - admin: get passenger manifest for a route
 router.get('/:id/passengers', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    // We fetch passengers from ALL confirmed bookings on this route.
-    // Also including the main booker.
-    const query = `
-      SELECT b.id AS booking_id, u.full_name AS main_booker, u.phone AS booker_phone, 
-             bp.passenger_name, bp.passenger_phone, bp.passenger_email 
-      FROM bookings b 
-      JOIN users u ON b.user_id = u.id 
-      LEFT JOIN booking_passengers bp ON b.id = bp.booking_id
-      WHERE b.route_id=? AND b.status='confirmed'
-    `;
-    const [rows] = await pool.query(query, [req.params.id]);
-    
-    // Format the manifest seamlessly, grouping main bookers with their extra dependent passengers
+    // 1. Get all confirmed bookings for this route
+    const [bookings] = await pool.query(`
+      SELECT b.id, b.user_id, b.booking_type, b.passenger_count, u.full_name as main_booker, u.phone as booker_phone
+      FROM bookings b
+      JOIN users u ON b.user_id = u.id
+      WHERE b.route_id = ? AND b.status = 'confirmed'
+    `, [req.params.id]);
+
     const manifest = [];
-    rows.forEach(row => {
-      // Always push the dependent passenger if it exists
-      if (row.passenger_name) {
-        manifest.push({
-          booking_id: row.booking_id,
-          passenger_name: row.passenger_name,
-          phone: row.passenger_phone || 'N/A',
-          booker: row.main_booker
-        });
-      }
-      // Since booking rows duplicate the main booker per passenger, we filter distinct main bookers out later mentally
-    });
 
-    // Alternatively, just grab distinct passengers + the main bookers
-    const rawPassengers = await pool.query(`
-      SELECT 'Main' as type, b.id as booking_id, u.full_name as passenger_name, u.phone, u.full_name as main_booker
-      FROM bookings b JOIN users u ON b.user_id = u.id WHERE b.route_id=? AND b.status='confirmed'
-      UNION
-      SELECT 'Dependent' as type, b.id as booking_id, bp.passenger_name, bp.passenger_phone as phone, u.full_name as main_booker
-      FROM bookings b JOIN users u ON b.user_id = u.id JOIN booking_passengers bp ON b.id = bp.booking_id WHERE b.route_id=? AND b.status='confirmed'
-    `, [req.params.id, req.params.id]);
+    // 2. For each booking, fetch extra passengers
+    for (const b of bookings) {
+      const [passengers] = await pool.query(
+        'SELECT passenger_name, passenger_phone, passenger_email FROM booking_passengers WHERE booking_id = ?',
+        [b.id]
+      );
+      
+      manifest.push({
+        booking_id: b.id,
+        booking_type: b.booking_type,
+        passenger_count: b.passenger_count,
+        main_booker: b.main_booker,
+        booker_phone: b.booker_phone,
+        passengers: passengers
+      });
+    }
 
-    res.json({ success: true, data: rawPassengers[0] });
+    res.json({ success: true, data: manifest });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

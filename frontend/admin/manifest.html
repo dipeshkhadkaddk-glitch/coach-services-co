@@ -155,30 +155,43 @@ async function loadManifest(bookingId) {
   const tbody = document.getElementById('passenger-table-body');
   const passengers = booking.passengers || [];
 
-  // Row 1 is always the main booker
-  const rows = [
-    { name: booking.user_name, phone: booking.user_phone || '—', email: booking.user_email || '—', type: 'Main Booker' },
-    ...passengers.map(p => ({
-      name: p.passenger_name || '—',
-      phone: p.passenger_phone || '—',
-      email: p.passenger_email || '—',
-      type: 'Passenger'
-    }))
-  ];
+  let rowsHtml = '';
+  
+  // 1. Always show Main Booker first
+  rowsHtml += `
+    <tr style="background:rgba(30,58,95,0.05);">
+      <td style="font-weight:700;color:var(--text-muted);">1</td>
+      <td style="font-weight:700;">${booking.user_name}</td>
+      <td>${booking.user_phone || '—'}</td>
+      <td style="font-size:13px;color:var(--text-muted);">${booking.user_email || '—'}</td>
+      <td><span class="badge badge-confirmed">Main Booker</span></td>
+    </tr>`;
 
-  document.getElementById('passenger-count-label').textContent = `${rows.length} total passenger${rows.length !== 1 ? 's' : ''}`;
+  // 2. Only show secondary passengers if it's a group booking
+  if (booking.booking_type === 'group' && passengers.length > 0) {
+    passengers.forEach((p, i) => {
+      rowsHtml += `
+        <tr>
+          <td style="color:#888; font-size:12px; padding-left:15px;">↳</td>
+          <td style="padding-left:15px; font-style:italic;">${p.passenger_name}</td>
+          <td>${p.passenger_phone || '—'}</td>
+          <td style="font-size:13px;color:var(--text-muted);">${p.passenger_email || '—'}</td>
+          <td><span class="badge" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);">Passenger</span></td>
+        </tr>`;
+    });
+  } else if (booking.booking_type === 'individual' && passengers.length > 0) {
+    // If it's an individual booking but has secondary data (rare but possible), 
+    // we ignore it to avoid duplication as per user request.
+    console.log("Skipping redundant passenger data for individual booking");
+  }
 
-  if (rows.length === 0) {
+  const totalCount = booking.booking_type === 'group' ? (passengers.length + 1) : 1;
+  document.getElementById('passenger-count-label').textContent = `${totalCount} total passenger${totalCount !== 1 ? 's' : ''}`;
+
+  if (totalCount === 0) {
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-muted);">No passengers found for this booking.</td></tr>';
   } else {
-    tbody.innerHTML = rows.map((p, i) => `
-      <tr>
-        <td style="font-weight:700;color:var(--text-muted);">${i + 1}</td>
-        <td style="font-weight:${i === 0 ? '700' : '400'};">${p.name}</td>
-        <td>${p.phone}</td>
-        <td style="font-size:13px;color:var(--text-muted);">${p.email}</td>
-        <td><span class="badge badge-${i === 0 ? 'confirmed' : 'individual'}" style="${i === 0 ? '' : 'background:rgba(99,102,241,0.15);color:#a5b4fc;border-color:rgba(99,102,241,0.3);'}">${p.type}</span></td>
-      </tr>`).join('');
+    tbody.innerHTML = rowsHtml;
   }
 
   document.getElementById('manifest-loading').style.display = 'none';

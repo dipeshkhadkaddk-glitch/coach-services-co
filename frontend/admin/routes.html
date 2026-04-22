@@ -74,7 +74,7 @@
         <div class="table-wrap">
           <table>
             <thead>
-            <tr><th>Pickup Location</th><th>Drop-off Location</th><th>Fixed Price</th><th>Vehicle Assigned</th><th>Status</th><th>Bookings</th><th>Actions</th></tr>
+            <tr><th>Pickup Location</th><th>Drop-off Location</th><th>Fixed Price</th><th>Vehicle Assigned</th><th>Status</th><th>Seats Filled</th><th>Actions</th></tr>
             </thead>
             <tbody id="routes-table">
               <tr><td colspan="6" class="text-center" style="padding:40px;color:var(--text-muted);">Loading...</td></tr>
@@ -186,18 +186,26 @@ async function loadRoutes() {
           : '<span style="color:var(--text-muted);">—</span>'}
       </td>
       <td>
-        ${statusBadge(r.status)}
-        ${r.is_closed ? '<span class="badge" style="background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);margin-left:4px;">🔒 Closed</span>' : '<span class="badge" style="background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.3);margin-left:4px;">🟢 Open</span>'}
-      </td>
-      <td>
-        <div class="action-btns">
-          <button class="btn btn-outline btn-sm" onclick="editRoute(${JSON.stringify(r).replace(/"/g,'&quot;')})">✏️</button>
-          <button class="btn btn-sm" style="${r.is_closed ? 'background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.3);' : 'background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.3);'}" onclick="toggleClose(${r.id}, this)">${r.is_closed ? '🔓 Open' : '🔒 Close'}</button>
-          <button class="btn btn-outline btn-sm" onclick="printManifest(${r.id}, '${r.pickup_location.replace(/'/g,'\\&apos;')} → ${r.dropoff_location.replace(/'/g,'\\&apos;')}')" title="Print Passenger List">🖨️</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteRoute(${r.id},this)">🗑</button>
-        </div>
-      </td>
-    </tr>`).join('');
++       ${r.statusBadge || statusBadge(r.status)}
++       ${r.is_closed ? '<span class="badge" style="background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);margin-left:4px;">🔒 Closed</span>' : '<span class="badge" style="background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.3);margin-left:4px;">🟢 Open</span>'}
++     </td>
++     <td style="text-align:center;">
++       <div style="font-weight:700; color:${parseInt(r.confirmed_passengers) >= r.seats ? 'var(--accent)' : 'inherit'};">
++         ${r.confirmed_passengers || 0} / ${r.seats || '—'}
++       </div>
++       <div style="font-size:11px; color:var(--text-muted);">${r.confirmed_bookings || 0} bookings</div>
++     </td>
++     <td>
++       <div class="action-btns">
++         <button class="btn btn-outline btn-sm" onclick="editRoute(${JSON.stringify(r).replace(/"/g,'&quot;')})">✏️</button>
++         <button class="btn btn-sm" style="${r.is_closed ? 'background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.3);' : 'background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.3);'}" onclick="toggleClose(${r.id}, this)">${r.is_closed ? '🔓 Open' : '🔒 Close'}</button>
++         <button class="btn btn-outline btn-sm" 
++           ${(!r.is_closed && (parseInt(r.confirmed_passengers) < r.seats)) ? 'disabled style="opacity:0.4; cursor:not-allowed;" title="Manifest only available once route is closed or bus is full"' : ''}
++           onclick="printManifest(${r.id}, '${r.pickup_location.replace(/'/g,'\\&apos;')} → ${r.dropoff_location.replace(/'/g,'\\&apos;')}')" title="Print Passenger List">🖨️</button>
++         <button class="btn btn-danger btn-sm" onclick="deleteRoute(${r.id},this)">🗑</button>
++       </div>
++     </td>
++   </tr>`).join('');
 }
 
 function openAddModal() {
@@ -270,19 +278,41 @@ async function toggleClose(id, btn) {
 async function printManifest(routeId, routeName) {
   const res = await api.getPassengerManifest(routeId);
   if (!res.ok) { toast.error('Failed to load passenger list'); return; }
-  const passengers = res.data.data || [];
+  const bookings = res.data.data || [];
 
-  const tableRows = passengers.length > 0
-    ? passengers.map((p, i) => `
-      <tr>
-        <td>${i+1}</td>
-        <td>${p.passenger_name || '—'}</td>
-        <td>${p.phone || '—'}</td>
-        <td>${p.main_booker || '—'}</td>
-        <td>${p.type || '—'}</td>
-        <td>#${p.booking_id}</td>
-      </tr>`).join('')
-    : '<tr><td colspan="6" style="text-align:center;padding:20px;">No confirmed passengers found for this route.</td></tr>';
+  let tableRows = '';
+  let count = 1;
+
+  if (bookings.length === 0) {
+    tableRows = '<tr><td colspan="5" style="text-align:center;padding:20px;">No confirmed passengers found for this route.</td></tr>';
+  } else {
+    bookings.forEach(b => {
+      // 1. Show main booker
+      tableRows += `
+        <tr style="background:rgba(30,58,95,0.05);">
+          <td style="font-weight:700;">${count++}</td>
+          <td style="font-weight:700;">${b.main_booker}</td>
+          <td>${b.booker_phone || '—'}</td>
+          <td><span style="font-weight:700; color:var(--primary); font-size:11px;">MAIN BOOKER</span></td>
+          <td style="font-size:11px; color:var(--text-muted);">#${b.booking_id} (${b.booking_type})</td>
+        </tr>`;
+
+      // 2. Show sub-passengers if group booking
+      if (b.booking_type === 'group' && b.passengers && b.passengers.length > 0) {
+        b.passengers.forEach(p => {
+          tableRows += `
+            <tr>
+              <td style="color:#888; font-size:12px; padding-left:20px;">↳</td>
+              <td style="padding-left:20px; font-style:italic;">${p.passenger_name}</td>
+              <td style="font-size:12px;">${p.passenger_phone || '—'}</td>
+              <td style="font-size:11px; color:#888;">Passenger</td>
+              <td style="font-size:11px; color:#888;">#${b.booking_id}</td>
+            </tr>`;
+          count++;
+        });
+      }
+    });
+  }
 
   const printWindow = window.open('', '_blank', 'width=900,height=700');
   printWindow.document.write(`
@@ -311,7 +341,7 @@ async function printManifest(routeId, routeName) {
       </div>
       <table>
         <thead>
-          <tr><th>#</th><th>Passenger Name</th><th>Phone</th><th>Booked By</th><th>Type</th><th>Booking ID</th></tr>
+          <tr><th>#</th><th>Passenger Name</th><th>Phone</th><th>Status</th><th>Booking Ref</th></tr>
         </thead>
         <tbody>${tableRows}</tbody>
       </table>
