@@ -182,7 +182,10 @@ if (currentUser) {
 async function loadDashboard() {
   // Bookings
   const bRes = await api.getBookings();
-  if (bRes.ok) {
+  if (!bRes.ok) {
+    toast.error('Failed to load bookings: ' + (bRes.data.message || 'Server error'));
+    document.getElementById('bookings-table').innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:30px;"><span style="color:red;">⚠️ Failed to load bookings</span></td></tr>';
+  } else {
     const bookings = bRes.data.data || [];
     document.getElementById('stat-total-bookings').textContent = bookings.length;
     document.getElementById('stat-confirmed').textContent = bookings.filter(b => b.status === 'confirmed').length;
@@ -209,9 +212,12 @@ async function loadDashboard() {
   // Events
   const eRes = await api.getEvents();
   const eventsEl = document.getElementById('events-list');
-  document.getElementById('stat-events').textContent = eRes.ok ? (eRes.data.data || []).length : 0;
-  if (eRes.ok) {
+  if (!eRes.ok) {
+    document.getElementById('stat-events').textContent = '0';
+    eventsEl.innerHTML = '<div class="alert alert-danger show">⚠️ Failed to load events: ' + (eRes.data.message || 'Server error') + '</div>';
+  } else {
     const events = (eRes.data.data || []).slice(0, 3);
+    document.getElementById('stat-events').textContent = eRes.data.data ? eRes.data.data.length : 0;
     if (events.length === 0) {
       eventsEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🏅</div><p>No events scheduled yet</p></div>';
     } else {
@@ -236,8 +242,6 @@ async function loadDashboard() {
         </div>`;
       }).join('');
     }
-  } else {
-    eventsEl.innerHTML = '<div class="alert alert-danger show">Failed to load events</div>';
   }
 }
 
