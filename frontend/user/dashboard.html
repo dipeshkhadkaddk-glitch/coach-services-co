@@ -1,187 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>My Dashboard — Coach Services Co.</title>
-  <meta name="description" content="User dashboard for Coach Services Co. Brisbane Olympics transport booking."/>
-  <link rel="stylesheet" href="/css/style.css"/>
-</head>
-<body>
-<div id="sidebar-overlay" class="sidebar-overlay"></div>
-<div class="app-layout">
-  <!-- Sidebar -->
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar-brand">
-      <div class="brand-icon">🚌</div>
-      <div class="brand-text">
-        <h2>Coach Services</h2>
-        <span>Brisbane Olympics 2032</span>
-      </div>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-section-label">Main</div>
-      <a href="/user/dashboard.html" class="nav-item active"><span class="nav-icon">🏠</span> Dashboard</a>
-      <a href="/user/events.html" class="nav-item"><span class="nav-icon">🏅</span> Events</a>
-      <a href="/user/search.html" class="nav-item"><span class="nav-icon">🔍</span> Search Vehicles</a>
-      <a href="/user/book.html" class="nav-item"><span class="nav-icon">🎫</span> Book a Ride</a>
-    </div>
-    <div class="sidebar-section" style="margin-top:12px;">
-      <div class="sidebar-section-label">Account</div>
-      <a href="/user/profile.html" class="nav-item"><span class="nav-icon">👤</span> My Profile</a>
-    </div>
-    <div class="sidebar-footer">
-      <div class="user-card">
-        <div class="user-avatar" id="sidebar-user-avatar">U</div>
-        <div class="user-info">
-          <div class="name" id="sidebar-user-name">Loading...</div>
-          <div class="role" id="sidebar-user-role">user</div>
-        </div>
-        <button class="btn-logout" onclick="logout()" title="Logout">⏻</button>
-      </div>
-    </div>
-  </aside>
-
-  <!-- Main -->
-  <div class="main-content">
-    <header class="topbar">
-      <div class="topbar-left">
-        <button class="hamburger" id="hamburger">☰</button>
-        <div>
-          <div class="breadcrumb"><span>Home</span></div>
-          <div class="page-title">Dashboard</div>
-        </div>
-      </div>
-      <div class="topbar-right">
-        <button class="notif-btn" onclick="toggleNotifPanel()" id="notif-btn">
-          🔔 <span class="notif-dot" id="notif-dot" style="display:none;"></span>
-        </button>
-      </div>
-    </header>
-
-    <!-- Notification Panel -->
-    <div class="notif-panel" id="notif-panel">
-      <div class="notif-panel-header">
-        <h3>🔔 Notifications</h3>
-        <button class="btn btn-sm btn-outline" onclick="markAllReadAndReload()">Mark all read</button>
-      </div>
-      <div class="notif-list" id="notif-list"><div class="loading"><div class="spinner"></div></div></div>
-    </div>
-
-    <main class="page-content">
-      <!-- Olympics Banner -->
-      <div class="olympics-banner">
-        <span class="banner-icon">🏟️</span>
-        <div>
-          <h3>Brisbane Olympics 2032</h3>
-          <p>Welcome to your Coach Services portal. Book rides, view events, and manage your travel.</p>
-        </div>
-      </div>
-
-      <!-- Welcome -->
-      <div class="page-header">
-        <div>
-          <h2>Welcome back, <span id="user-greeting">there</span>! 👋</h2>
-          <p>Your transport dashboard for Brisbane Olympics 2032</p>
-        </div>
-        <a href="/user/book.html" class="btn btn-primary"><span>🎫</span> New Booking</a>
-      </div>
-
-      <!-- Quick Stats -->
-      <div class="stats-grid" id="user-stats">
-        <div class="stat-card yellow">
-          <span class="stat-icon">🎫</span>
-          <div class="stat-value" id="stat-total-bookings">—</div>
-          <div class="stat-label">My Bookings</div>
-        </div>
-        <div class="stat-card green">
-          <span class="stat-icon">✅</span>
-          <div class="stat-value" id="stat-confirmed">—</div>
-          <div class="stat-label">Confirmed</div>
-        </div>
-        <div class="stat-card blue">
-          <span class="stat-icon">⏳</span>
-          <div class="stat-value" id="stat-pending">—</div>
-          <div class="stat-label">Pending</div>
-        </div>
-        <div class="stat-card purple">
-          <span class="stat-icon">🏅</span>
-          <div class="stat-value" id="stat-events">—</div>
-          <div class="stat-label">Upcoming Events</div>
-        </div>
-      </div>
-
-      <div class="grid-2">
-        <!-- My Recent Bookings -->
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">My Recent Bookings</h3>
-            <a href="/user/book.html" class="btn btn-sm btn-primary">+ New</a>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Route</th><th>Type</th><th>Status</th><th>Date</th></tr></thead>
-              <tbody id="bookings-table"><tr><td colspan="4" class="text-center text-muted" style="padding:30px;">Loading...</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Upcoming Events -->
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">Upcoming Events</h3>
-            <a href="/user/events.html" class="btn btn-sm btn-outline">View All</a>
-          </div>
-          <div id="events-list" style="padding:16px;">
-            <div class="loading"><div class="spinner"></div></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Quick Actions -->
-      <div class="card mt-4">
-        <div class="card-header"><h3 class="card-title">Quick Actions</h3></div>
-        <div class="card-body">
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">
-            <a href="/user/search.html" class="btn btn-secondary" style="flex-direction:column;padding:20px;gap:8px;">
-              <span style="font-size:28px;">🔍</span>
-              <span>Search Vehicles</span>
-            </a>
-            <a href="/user/book.html" class="btn btn-secondary" style="flex-direction:column;padding:20px;gap:8px;">
-              <span style="font-size:28px;">🎫</span>
-              <span>Book a Ride</span>
-            </a>
-            <a href="/user/events.html" class="btn btn-secondary" style="flex-direction:column;padding:20px;gap:8px;">
-              <span style="font-size:28px;">🏅</span>
-              <span>View Events</span>
-            </a>
-            <a href="/user/profile.html" class="btn btn-secondary" style="flex-direction:column;padding:20px;gap:8px;">
-              <span style="font-size:28px;">👤</span>
-              <span>My Profile</span>
-            </a>
-          </div>
-        </div>
-      </div>
-    </main>
-  </div>
-</div>
-
-<script src="/js/api.js"></script>
-<script src="/js/app.js"></script>
-<script>
-const currentUser = requireAuth('user');
-if (currentUser) {
-  populateSidebar(currentUser);
-  initSidebar();
-  document.getElementById('user-greeting').textContent = (currentUser.full_name || currentUser.name || '').split(' ')[0];
-  loadDashboard();
-  loadNotifications();
-}
-
 async function loadDashboard() {
   // Bookings
   const bRes = await api.getBookings();
-  if (bRes.ok) {
+  if (!bRes.ok) {
+    toast.error('Failed to load bookings: ' + (bRes.data.message || 'Server error'));
+    document.getElementById('bookings-table').innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:30px;"><span style="color:red;">⚠️ Failed to load bookings</span></td></tr>';
+  } else {
     const bookings = bRes.data.data || [];
     document.getElementById('stat-total-bookings').textContent = bookings.length;
     document.getElementById('stat-confirmed').textContent = bookings.filter(b => b.status === 'confirmed').length;
@@ -208,9 +31,12 @@ async function loadDashboard() {
   // Events
   const eRes = await api.getEvents();
   const eventsEl = document.getElementById('events-list');
-  document.getElementById('stat-events').textContent = eRes.ok ? (eRes.data.data || []).length : 0;
-  if (eRes.ok) {
+  if (!eRes.ok) {
+    document.getElementById('stat-events').textContent = '0';
+    eventsEl.innerHTML = '<div class="alert alert-danger show">⚠️ Failed to load events: ' + (eRes.data.message || 'Server error') + '</div>';
+  } else {
     const events = (eRes.data.data || []).slice(0, 3);
+    document.getElementById('stat-events').textContent = eRes.data.data ? eRes.data.data.length : 0;
     if (events.length === 0) {
       eventsEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🏅</div><p>No events scheduled yet</p></div>';
     } else {
@@ -235,15 +61,5 @@ async function loadDashboard() {
         </div>`;
       }).join('');
     }
-  } else {
-    eventsEl.innerHTML = '<div class="alert alert-danger show">Failed to load events</div>';
   }
 }
-
-async function markAllReadAndReload() {
-  await api.markAllRead();
-  loadNotifications();
-}
-</script>
-</body>
-</html>
