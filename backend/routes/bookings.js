@@ -76,51 +76,64 @@ router.post('/', authMiddleware, async (req, res) => {
   if (!['individual', 'group'].includes(booking_type)) {
     return res.status(400).json({ success: false, message: 'Booking type must be individual or group' });
   }
-  try {
-    // Check vehicle capacity
-    const [vehicleRows] = await pool.query('SELECT * FROM vehicles WHERE id=?', [vehicle_id]);
-    if (vehicleRows.length === 0) return res.status(404).json({ success: false, message: 'Vehicle not found' });
-    const vehicle = vehicleRows[0];
 
-    // Check if route is closed
-    const [routeCheck] = await pool.query('SELECT is_closed FROM routes WHERE id=?', [route_id]);
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // 1. Check vehicle capacity and LOCK the row
+    const [vehicleRows] = await conn.query('SELECT seats FROM vehicles WHERE id=? FOR UPDATE', [vehicle_id]);
+    if (vehicleRows.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ success: false, message: 'Vehicle not found' });
+    }
+    const vehicleSeats = vehicleRows[0].seats;
+
+    // 2. Check if route is closed
+    const [routeCheck] = await conn.query('SELECT is_closed FROM routes WHERE id=?', [route_id]);
     if (routeCheck.length > 0 && routeCheck[0].is_closed) {
+      await conn.rollback();
       return res.status(400).json({ success: false, message: 'This route is currently closed for bookings' });
     }
 
-    // Calculate currently booked seats (confirmed + pending)
-    const [bookedRows] = await pool.query(
+    // 3. Calculate currently booked seats (confirmed + pending)
+    const [bookedRows] = await conn.query(
       "SELECT SUM(passenger_count) as total_booked FROM bookings WHERE vehicle_id=? AND route_id=? AND status != 'cancelled'",
       [vehicle_id, route_id]
     );
     const alreadyBooked = parseInt(bookedRows[0].total_booked) || 0;
-    const availableSeats = vehicle.seats - alreadyBooked;
+    const availableSeats = vehicleSeats - alreadyBooked;
 
     const count = parseInt(passenger_count) || 1;
     if (count > availableSeats) {
+      await conn.rollback();
       const msg = availableSeats > 0 
         ? `Only ${availableSeats} seats remaining on this shuttle.` 
         : `This shuttle is fully booked.`;
       return res.status(400).json({ success: false, message: msg });
     }
 
-    const [bookingResult] = await pool.query(
+    // 4. Create booking
+    const [bookingResult] = await conn.query(
       'INSERT INTO bookings (user_id, vehicle_id, route_id, booking_type, passenger_count, notes) VALUES (?,?,?,?,?,?)',
       [req.user.id, vehicle_id, route_id, booking_type, count, notes || '']
     );
     const bookingId = bookingResult.insertId;
 
-    // Insert passengers
+    // 5. Insert passengers
     if (passengers && Array.isArray(passengers)) {
       for (const p of passengers) {
-        await pool.query(
+        await conn.query(
           'INSERT INTO booking_passengers (booking_id, passenger_name, passenger_phone, passenger_email) VALUES (?,?,?,?)',
           [bookingId, p.name || '', p.phone || '', p.email || null]
         );
       }
     }
 
-    // Notify admin
+    // Commit transaction
+    await conn.commit();
+
+    // 6. Notify admin (post-transaction)
     const [admins] = await pool.query("SELECT id FROM users WHERE role='admin'");
     for (const admin of admins) {
       await pool.query(
@@ -129,7 +142,7 @@ router.post('/', authMiddleware, async (req, res) => {
       );
     }
 
-    // Get route details
+    // Get route details for notification
     const [routeRows] = await pool.query('SELECT * FROM routes WHERE id=?', [route_id]);
     const route = routeRows[0];
 
@@ -139,7 +152,10 @@ router.post('/', authMiddleware, async (req, res) => {
 
     res.status(201).json({ success: true, message: 'Booking submitted successfully', id: bookingId });
   } catch (err) {
+    if (conn) await conn.rollback();
     res.status(500).json({ success: false, message: err.message });
+  } finally {
+    if (conn) conn.release();
   }
 });
 

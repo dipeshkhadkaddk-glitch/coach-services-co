@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS routes (
   price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   vehicle_id INT,
   status ENUM('active','inactive') DEFAULT 'active',
+  is_closed BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE SET NULL
 );
@@ -54,6 +55,7 @@ CREATE TABLE IF NOT EXISTS events (
   event_date DATE NOT NULL,
   start_time TIME NOT NULL,
   end_time TIME NOT NULL,
+  is_closed BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
